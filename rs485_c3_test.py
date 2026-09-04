@@ -34,7 +34,9 @@ def send_line(text):
 
     uart.write((text + "\n").encode())
     uart.flush()
-    time.sleep_ms(3)
+    # At 9600 baud a short packet needs several milliseconds on the wire.
+    # Keep the driver enabled until the final stop bit has cleared.
+    time.sleep_ms(20)
 
     if direction is not None:
         direction.value(0)
@@ -46,6 +48,7 @@ print("Waiting for PONG from ESP32-S3...")
 
 sequence = 0
 last_ping = time.ticks_ms() - 1000
+rx_buffer = b""
 
 while True:
     now = time.ticks_ms()
@@ -57,10 +60,17 @@ while True:
         last_ping = now
 
     if uart.any():
-        data = uart.readline()
+        data = uart.read()
         if data:
-            line = data.decode("utf-8", "ignore").strip()
-            print("RX:", line)
+            rx_buffer += data
+
+            while b"\n" in rx_buffer:
+                raw, rx_buffer = rx_buffer.split(b"\n", 1)
+                raw = raw.strip()
+                try:
+                    line = raw.decode("utf-8")
+                    print("RX:", line)
+                except UnicodeError:
+                    print("RX BYTES:", raw)
 
     time.sleep_ms(10)
-
