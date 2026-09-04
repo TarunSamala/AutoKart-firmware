@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AutoKart RC — Actuator Control Report</title>
+<style>
+@page { size: A4; margin: 14mm 15mm; }
+* { box-sizing: border-box; }
+body { font-family: Arial, Helvetica, sans-serif; color:#17202a; font-size:10pt; line-height:1.3; margin:0; }
+h1 { color:#0b3954; font-size:24pt; margin:0 0 3px; }
+h2 { color:#0b3954; font-size:15pt; margin:13px 0 5px; border-bottom:2px solid #4aa3a2; padding-bottom:2px; }
+h3 { color:#176b87; font-size:11pt; margin:8px 0 3px; }
+p { margin:4px 0 7px; }
+.subtitle { color:#52616b; font-size:11pt; margin-bottom:11px; }
+.banner { background:#e8f4f5; border-left:5px solid #1d8a99; padding:8px 10px; margin:8px 0 10px; }
+.warning { background:#fff3d6; border-left:5px solid #e3a72f; padding:7px 9px; }
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.card { border:1px solid #c9d6dc; border-radius:5px; padding:7px 9px; }
+.card h3 { margin-top:0; }
+table { width:100%; border-collapse:collapse; margin:5px 0 8px; font-size:9pt; }
+th { background:#0b3954; color:white; text-align:left; padding:5px; }
+td { border:1px solid #c9d6dc; padding:4px 5px; vertical-align:top; }
+tr:nth-child(even) td { background:#f4f8f9; }
+code { font-family: "Courier New", monospace; font-size:8.5pt; color:#203040; }
+.flow { display:flex; align-items:center; justify-content:space-between; gap:5px; margin:8px 0; }
+.flow div { flex:1; text-align:center; border:1px solid #80b8bd; background:#eef8f8; padding:7px 4px; border-radius:4px; font-size:8.5pt; }
+.arrow { flex:0 0 auto !important; border:0 !important; background:white !important; font-size:14pt !important; padding:0 !important; }
+.small { font-size:8.5pt; color:#52616b; }
+.pagebreak { page-break-before:always; }
+ul { margin:4px 0 7px 18px; padding:0; }
+li { margin:2px 0; }
+.footer { margin-top:10px; border-top:1px solid #c9d6dc; padding-top:4px; font-size:8pt; color:#62727c; }
+</style>
+</head>
+<body>
+<h1>AutoKart RC — Actuator Control</h1>
+<div class="subtitle">Compact implementation report • Based on the controller and wiring files in this workspace • 02 September 2026</div>
+
+<div class="banner"><b>Primary implementation:</b> <code>autokart_rc_v5_controlled_stop.py</code>. It is an ESP32-S3 Wi‑Fi bench controller with open-loop stepper positioning for steering/brake and an analog throttle command for the BLD750.</div>
+
+<h2>1. System at a glance</h2>
+<div class="flow">
+  <div><b>Browser UI</b><br>arm, steer, brake, throttle, stop</div><div class="arrow">→</div>
+  <div><b>ESP32-S3</b><br>HTTP server + state machine</div><div class="arrow">→</div>
+  <div><b>Actuator interfaces</b><br>TB6600 and GP8630N/BLD750</div>
+</div>
+<div class="grid">
+ <div class="card"><h3>Steering actuator</h3><p>Stepper motor through a TB6600 driver. Motion is generated as STEP pulses; DIR selects sign; ENA enables the driver.</p></div>
+ <div class="card"><h3>Brake actuator</h3><p>Second stepper/TB6600 axis. Positive motion is configured as clockwise brake application; range is 0 to +15° in v5.</p></div>
+ <div class="card"><h3>Throttle / traction actuator</h3><p>ESP32 writes a 16-bit value to the GP8630N over I²C. The module is configured for 0–10 V and its OUT feeds BLD750 <code>SV</code>.</p></div>
+ <div class="card"><h3>Drive safety inputs</h3><p><code>full_bldc_test.py</code> separately demonstrates BLD750 enable, quick-brake and F/R inputs via GPIO13–15 and PN2222A transistors.</p></div>
+</div>
+
+<h2>2. Wiring and signal map</h2>
+<table><tr><th>Function</th><th>ESP32-S3</th><th>Interface / destination</th><th>Meaning</th></tr>
+<tr><td>Steering step</td><td>GPIO4</td><td>TB6600 PUL+</td><td>One pulse advances one microstep.</td></tr>
+<tr><td>Steering direction</td><td>GPIO5</td><td>TB6600 DIR+</td><td>Positive = clockwise/right in current convention.</td></tr>
+<tr><td>Steering enable</td><td>GPIO6</td><td>TB6600 ENA+</td><td>Configured active-low: 0 enable, 1 disable.</td></tr>
+<tr><td>Brake step / direction / enable</td><td>GPIO10 / 11 / 12</td><td>Second TB6600</td><td>Positive = clockwise/apply.</td></tr>
+<tr><td>I²C</td><td>GPIO8 SDA, GPIO9 SCL</td><td>GP8630N, address <code>0x58</code></td><td>Mode and DAC output commands.</td></tr>
+<tr><td>Throttle analog</td><td>GP8630N OUT</td><td>BLD750 SV; GP GND → BLD COM</td><td>0–10 V configured output; v5 software ceiling 3.0 V.</td></tr>
+</table>
+<p class="small">Supporting wiring references: <code>rc_connection.txt</code>, <code>Steering Brake connections.txt</code>, and <code>throttle _details</code>.</p>
+
+<h2>3. Steering and brake control</h2>
+<p>Each axis is represented by a <code>StepperAxis</code> object. The browser sends a target or nudge; the ESP32 clamps it to the configured range, converts degrees to pulses, and the main loop moves one pulse at a time until the software target is reached.</p>
+<table><tr><th>Parameter</th><th>Steering</th><th>Brake</th></tr>
+<tr><td>Software range (v5)</td><td>−90° to +90°</td><td>0° to +15°</td></tr>
+<tr><td>Pulse calibration</td><td colspan="2"><code>3200 / 360 × gear ratio</code> pulses per output degree; ratios are currently 1.0.</td></tr>
+<tr><td>Pulse timing</td><td>Starts 1200 µs, ramps to 500 µs</td><td>Starts 1500 µs, ramps to 700 µs</td></tr>
+<tr><td>Motion commands</td><td colspan="2"><code>/steer_left</code>, <code>/steer_right</code>, <code>/steer_nudge</code>, <code>/steer_hold</code>, <code>/steer_center</code>.</td></tr>
+</table>
+<p><b>Important limitation:</b> this is open-loop. The reported position is only the number of commanded pulses from an assumed physical zero; there is no encoder or limit switch feedback. The mechanism must be physically centered/released at the assumed startup position, and the gear ratios must be calibrated.</p>
+
+<div class="pagebreak"></div>
+<h1>Actuator Control — Operation & Safety</h1>
+<div class="subtitle">How commands become actuator motion</div>
+
+<h2>4. Throttle control sequence</h2>
+<ol>
+ <li>The UI sends a normalized throttle request; the server clamps it to 0–3.0 V and accepts it only when armed and the brake is released.</li>
+ <li>The request becomes <code>throttle_target</code>. Every 15 ms, <code>throttle_update()</code> ramps the actual output toward that target.</li>
+ <li>v5 increases by 0.02 V per update and normally decreases by 0.10 V per update. The voltage is converted to a 16-bit DAC code: <code>int((V / 10) × 65535)</code>.</li>
+ <li>The code is written to GP8630N register <code>0x02</code>; the GP8630N output controls BLD750 <code>SV</code>.</li>
+</ol>
+<p class="warning"><b>Bench-only status:</b> the source notes that the BLD750 previously faulted near 0.75 V, so the 3.0 V ceiling is not electrically validated. Keep wheels off the ground until the fault and command scaling are resolved.</p>
+
+<h2>5. Brake, arm, stop, and watchdog logic</h2>
+<table><tr><th>Event</th><th>Controller action</th></tr>
+<tr><td>Boot</td><td>Throttle = 0 V; steering target = center; brake target = applied; TB6600 drivers enabled after initialization; controller remains disarmed.</td></tr>
+<tr><td>Arm</td><td>Throttle = 0; steering holds; brake target moves to 0/released; then commands may be accepted.</td></tr>
+<tr><td>Brake on</td><td>Immediately zeros throttle, marks brake active, and targets +15° clockwise application.</td></tr>
+<tr><td>Brake off</td><td>Releases the stepper brake to 0° and forces throttle to zero; a new throttle command is required.</td></tr>
+<tr><td>Controlled stop</td><td>Disarms, ramps throttle down at 0.04 V every 15 ms, then commands full brake application once throttle is near zero.</td></tr>
+<tr><td>通信 timeout</td><td>If an armed controller receives no heartbeat for 1.8 s: disarm, throttle zero, steering hold, brake apply.</td></tr>
+<tr><td>E-stop</td><td>Latched state: throttle zero, steering hold, brake apply, all commands blocked until reset; reset leaves the system disarmed.</td></tr>
+</table>
+
+<h2>6. Standalone BLD750 actuator test</h2>
+<p><code>full_bldc_test.py</code> is a separate direct-drive bench test. PN2222A transistors pull BLD750 control inputs low when their GPIO is high:</p>
+<table><tr><th>GPIO</th><th>BLD750 input</th><th>Function</th></tr>
+<tr><td>13</td><td>EN</td><td>High → transistor on → input low → RUN; low → STOP.</td></tr>
+<tr><td>14</td><td>BRK</td><td>High → input low → brake released; low/open → quick brake.</td></tr>
+<tr><td>15</td><td>F/R</td><td>Direction selection; software labels states CW and CCW.</td></tr>
+</table>
+<p>That test applies a layered safe stop: command the GP8630N to 0 V, apply BLD750 brake, and stop/disable enable. Direction changes are allowed only in the full safe state.</p>
+
+<h2>7. Practical validation checklist</h2>
+<ul>
+ <li>Confirm TB6600 microstep switches match the assumed 3200 pulses/revolution.</li>
+ <li>Measure actual steering and brake travel; update gear ratios and software limits.</li>
+ <li>Verify DIR polarity and brake apply direction at low speed.</li>
+ <li>Verify GP8630N 0–10 V scaling with a meter before connecting/energizing traction.</li>
+ <li>Test arm interlock, brake/throttle interlock, controlled stop, E-stop, and 1.8 s heartbeat timeout with wheels off the ground.</li>
+ <li>Add physical end stops or feedback before treating the open-loop angle estimate as a safety-critical position.</li>
+</ul>
+<div class="footer">Source basis: <code>autokart_rc_v5_controlled_stop.py</code> (primary integrated controller), <code>rc_bench.py</code> (earlier conservative bench controller), <code>full_bldc_test.py</code> (standalone BLD750 test), and the workspace wiring notes.</div>
+</body></html>

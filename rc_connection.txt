@@ -1,0 +1,32 @@
+# ============================================================
+# AUTOKART RC - ESP32-S3
+# ============================================================
+#
+# STEERING:
+#   GPIO4  -> TB6600 PUL+
+#   GPIO5  -> TB6600 DIR+
+#   GPIO6  -> TB6600 ENA+
+#
+# BRAKE:
+#   GPIO10 -> TB6600 PUL+
+#   GPIO11 -> TB6600 DIR+
+#   GPIO12 -> TB6600 ENA+
+#
+# GP8630N:
+#   GPIO8 -> SDA
+#   GPIO9 -> SCL
+#   3.3V  -> VCC
+#   GND   -> GND
+#
+# GP8630N OUT -> BLD750 SV
+# GP8630N GND -> BLD750 COM
+#
+# BLD750:
+#   EN  -> COM
+#   BRK -> COM
+#
+# IMPORTANT:
+# Steering and brake are currently OPEN LOOP.
+# Start with:
+#   steering physically centered
+#   brake physically released

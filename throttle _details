@@ -1,0 +1,52 @@
+### ESP32-S3 → GP8630N
+
+| ESP32-S3  | GP8630N |
+| --------- | ------- |
+| **GPIO8** | SDA     |
+| **GPIO9** | SCL     |
+| **3.3V**  | + / VCC |
+| **GND**   | − / GND |
+
+### GP8630N → BLD-750
+
+| GP8630N | BLD-750 |
+| ------- | ------- |
+| **OUT** | SV      |
+| **GND** | COM     |
+
+### BLD-750 Control
+
+```text
+EN  ── COM
+BRK ── COM
+F/R ── OPEN
+
+SPEED ── NC
+ALM   ── NC
+```
+
+### Motor + Hall
+
+```text
+Motor Yellow → U
+Motor Green  → V
+Motor Blue   → W
+
+Hall Red     → REF+
+Hall Black   → REF-
+Hall Yellow  → HU
+Hall Green   → HV
+Hall Blue    → HW
+```
+
+### Power
+
+```text
+Battery + → BLD-750 DC+
+Battery - → BLD-750 DC-
+
+ESP32 → USB / Power bank
+```
+
+**GPIO used: `GPIO8 = SDA`, `GPIO9 = SCL`.**
+-
