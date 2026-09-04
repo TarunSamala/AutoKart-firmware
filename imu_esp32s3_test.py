@@ -16,7 +16,8 @@ import time
 
 SDA_PIN = 8
 SCL_PIN = 9
-I2C_FREQ = 400000
+# Use standard-mode I2C while bringing up unknown wiring/modules.
+I2C_FREQ = 100000
 
 MPU_ADDRS = (0x68, 0x69)
 WHO_AM_I = 0x75
@@ -84,7 +85,10 @@ address, identity, model = detect_mpu(i2c)
 
 if address is None:
     print("MPU NOT FOUND")
-    print("Check VCC, GND, SDA/SCL, pull-ups, and AD0 address.")
+    print("Expected MPU address: 0x68 or 0x69")
+    print("Check: VCC, GND, SDA/SCL, pull-ups, and AD0/SDO.")
+    print("For I2C, connect CS/NCS HIGH to 3V3 if your board exposes it.")
+    print("CS/NCS LOW selects SPI and prevents I2C detection.")
     raise RuntimeError("MPU-9250/6500 not detected")
 
 print(model, "found at", hex(address),
