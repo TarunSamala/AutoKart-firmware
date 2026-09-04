@@ -28,6 +28,14 @@ Test files:
 - `bench/rs485_s3_test.py` — ESP32-S3 responder
 - `docs/RS485_CONNECTIONS.md` — wiring and direction-control details
 
+For two-laptop text communication, use:
+
+- `bench/rs485_chat_c3.py` — run on the XIAO ESP32-C3
+- `bench/rs485_chat_s3.py` — run on the ESP32-S3
+
+Each laptop connects to its local board with USB. Type a line in either
+serial terminal and press Enter; it is forwarded to the other board.
+
 To upload a test file with MicroPython, connect one board at a time as
 `/dev/ttyACM0`:
 
