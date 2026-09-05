@@ -58,6 +58,16 @@ GPIO9 → SCL
 
 This test runs on the ESP32, not on the computer's normal Python interpreter.
 
+## Encoder tests
+
+Standalone ESP32-S3 tests are available for both encoders:
+
+```text
+bench/as5600_esp32s3_test.py   AS5600 over I2C
+bench/as5047p_esp32s3_test.py  AS5047P over SPI
+docs/ENCODER_CONNECTIONS.md    wiring details
+```
+
 ## Integrated firmware
 
 The main actuator controller is currently:
