@@ -1,8 +1,10 @@
 """ESP32-S3 direct MPU-9250 / MPU-6500 I2C smoke test.
 
-Wiring:
-  ESP32-S3 GPIO8  -> IMU SDA
-  ESP32-S3 GPIO9  -> IMU SCL
+Wiring for the current standalone board test:
+  ESP32-S3 GPIO11 -> IMU SDA
+  ESP32-S3 GPIO12 -> IMU SCL
+  ESP32-S3 GPIO10 -> IMU NCS/CS (held HIGH for I2C)
+  IMU ADD/AD0    -> GND (I2C address 0x68)
   ESP32-S3 3V3    -> IMU VCC
   ESP32-S3 GND    -> IMU GND
 
@@ -14,8 +16,9 @@ from machine import Pin, I2C
 import time
 
 
-SDA_PIN = 8
-SCL_PIN = 9
+SDA_PIN = 11
+SCL_PIN = 12
+NCS_PIN = 10
 # Use standard-mode I2C while bringing up unknown wiring/modules.
 I2C_FREQ = 100000
 
@@ -70,6 +73,10 @@ def read_motion(i2c, address):
 
 print("\nESP32-S3 MPU-9250/6500 DIRECT I2C TEST")
 print("SDA = GPIO", SDA_PIN, " SCL = GPIO", SCL_PIN)
+print("NCS = GPIO", NCS_PIN, "(HIGH / I2C mode)")
+
+# NCS/CS must be HIGH for the MPU to use I2C instead of SPI.
+ncs = Pin(NCS_PIN, Pin.OUT, value=1)
 
 i2c = I2C(
     0,
@@ -86,8 +93,9 @@ address, identity, model = detect_mpu(i2c)
 if address is None:
     print("MPU NOT FOUND")
     print("Expected MPU address: 0x68 or 0x69")
-    print("Check: VCC, GND, SDA/SCL, pull-ups, and AD0/SDO.")
-    print("For I2C, connect CS/NCS HIGH to 3V3 if your board exposes it.")
+    print("Check: VCC, GND, SDA/SCL, pull-ups, and ADD/AD0.")
+    print("ADD/AD0 to GND should select address 0x68.")
+    print("NCS is being driven HIGH on GPIO", NCS_PIN)
     print("CS/NCS LOW selects SPI and prevents I2C detection.")
     raise RuntimeError("MPU-9250/6500 not detected")
 
