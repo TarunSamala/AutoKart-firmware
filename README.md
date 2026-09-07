@@ -75,6 +75,11 @@ For the RA-02 and LAY37 emergency-stop wiring, see
 `bench/pico2_ra02_estop_test.py`; it checks the RA-02 SPI identity and reports
 the emergency-stop input without transmitting or moving actuators.
 
+## RA-02 with ESP8266MOD
+
+The ESP8266MOD RA-02 SPI wiring is documented in
+`docs/RA02_ESP8266_CONNECTIONS.md`.
+
 ## Integrated firmware
 
 The main actuator controller is currently:
