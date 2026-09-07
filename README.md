@@ -68,6 +68,13 @@ bench/as5047p_esp32s3_test.py  AS5047P over SPI
 docs/ENCODER_CONNECTIONS.md    wiring details
 ```
 
+## Pico 2 fail-stop bench test
+
+For the RA-02 and LAY37 emergency-stop wiring, see
+`docs/PICO2_RA02_ESTOP_CONNECTIONS.md`. The standalone test is
+`bench/pico2_ra02_estop_test.py`; it checks the RA-02 SPI identity and reports
+the emergency-stop input without transmitting or moving actuators.
+
 ## Integrated firmware
 
 The main actuator controller is currently:
