@@ -77,7 +77,7 @@ FR_PIN = 15
 # THROTTLE LIMIT
 # ----------------------------
 
-MAX_VOLTAGE = 3.00
+MAX_VOLTAGE = 5.00
 
 RAMP_STEP = 0.05
 RAMP_DELAY_MS = 40
@@ -557,7 +557,7 @@ V
 <input
 type="range"
 min="0"
-max="300"
+max="500"
 value="0"
 step="5"
 class="slider"
