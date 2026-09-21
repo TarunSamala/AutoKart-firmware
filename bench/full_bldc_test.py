@@ -16,8 +16,8 @@ from machine import Pin, I2C
 #   Address = 0x58
 #
 # PN2222A CONTROL
-#   GPIO13 -> EN transistor
-#   GPIO14 -> BRK transistor
+#   GPIO13 -> BRK transistor
+#   GPIO14 -> EN transistor
 #   GPIO15 -> F/R transistor
 #
 # NPN LOGIC:
@@ -68,8 +68,8 @@ MODE_0_10V = 0x1C
 # BLD DIGITAL CONTROL
 # ----------------------------
 
-EN_PIN = 13
-BRK_PIN = 14
+BRK_PIN = 13
+EN_PIN = 14
 FR_PIN = 15
 
 
