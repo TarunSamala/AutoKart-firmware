@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoKart Firmware Bench Report</title>
+<style>
+@page { size: A4; margin: 13mm 14mm 14mm; }
+* { box-sizing: border-box; }
+body { font-family: Arial, Helvetica, sans-serif; color: #17202a; font-size: 9.2pt; line-height: 1.3; margin: 0; }
+h1 { color: #0b3558; font-size: 22pt; margin: 0 0 4px; }
+h2 { color: #0b4f71; font-size: 14pt; border-bottom: 1px solid #9ab8c9; padding-bottom: 3px; margin: 15px 0 7px; }
+h3 { color: #0b4f71; font-size: 10.5pt; margin: 10px 0 4px; }
+p { margin: 4px 0 7px; }
+.subtitle { color: #4b6070; font-size: 11pt; margin-bottom: 12px; }
+.banner { background: #e8f2f7; border-left: 5px solid #087ea4; padding: 8px 10px; margin: 8px 0 12px; }
+.good { color: #176b3a; font-weight: bold; }
+.warn { color: #975d00; font-weight: bold; }
+.bad { color: #a52b2b; font-weight: bold; }
+table { width: 100%; border-collapse: collapse; margin: 5px 0 9px; page-break-inside: avoid; }
+th { background: #0b4f71; color: white; text-align: left; font-weight: bold; }
+th, td { border: 1px solid #b9c9d2; padding: 4px 5px; vertical-align: top; }
+tr:nth-child(even) td { background: #f3f7f9; }
+code, .mono { font-family: "DejaVu Sans Mono", monospace; font-size: 8.3pt; }
+ul { margin: 4px 0 7px 18px; padding: 0; }
+li { margin: 2px 0; }
+.two { display: table; width: 100%; table-layout: fixed; }
+.col { display: table-cell; width: 50%; vertical-align: top; padding-right: 8px; }
+.col + .col { padding: 0 0 0 8px; }
+.small { font-size: 8.1pt; color: #526570; }
+.page-break { page-break-before: always; }
+.footer { margin-top: 15px; border-top: 1px solid #b9c9d2; padding-top: 4px; font-size: 7.8pt; color: #627783; }
+</style>
+</head>
+<body>
+<h1>AutoKart Firmware Bench Report</h1>
+<div class="subtitle">Changes, troubleshooting history, and pinout comparison &mdash; 21 September 2026</div>
+
+<div class="banner"><b>Scope:</b> This report covers the firmware and bench wiring developed in <span class="mono">AutoKart-firmware</span> for ESP32-S3 BLDC testing, steering/brake tests, and RA-02 LoRa emergency-stop experiments. It is a bench record, not a road-ready safety certification.</div>
+
+<h2>1. Current project state</h2>
+<table>
+<tr><th>Area</th><th>Current status</th></tr>
+<tr><td>BLDC controller</td><td><span class="good">Working bench test.</span> Current branch uses the non-LoRa file <span class="mono">bench/full_bldc_test.py</span>, GP8630N output, and web UI.</td></tr>
+<tr><td>Throttle/output</td><td>Tested first at approximately 3 V and later limited to 5 V. The current controller reports <span class="mono">MAX_VOLTAGE = 5.00</span> V.</td></tr>
+<tr><td>Steering and brake</td><td>Separate open-loop TB6600 test in <span class="mono">bench/steering_brake_test.py</span>. Software limits are steering -45&deg; to +45&deg; and brake 0&deg; to 30&deg;.</td></tr>
+<tr><td>LoRa E-stop</td><td>Radio-only Pico/ESP32 tests worked. The combined LoRa/BLDC file is kept separate for continued integration and safety testing.</td></tr>
+</table>
+
+<h2>2. Changes made</h2>
+<ul>
+<li><b>Repository organization:</b> bench MicroPython tests are under <span class="mono">bench/</span>, vehicle firmware under <span class="mono">firmware/</span>, wiring notes under <span class="mono">docs/</span>, and board images under <span class="mono">images/</span>.</li>
+<li><b>BLDC transistor mapping:</b> BRK and EN were exchanged so the active controller uses BRK GPIO13, EN GPIO14, and F/R GPIO15. F/R stayed on GPIO15.</li>
+<li><b>Throttle range:</b> the BLDC bench file was changed from a 3 V test range to a 5 V maximum. The slider was changed to 0.01 V resolution and its request handling was made smoother by sending the latest pending value instead of flooding the web server.</li>
+<li><b>Direction test:</b> clockwise and counter-clockwise output were compared. The large difference observed in one direction was recorded as an engineering issue to investigate, not treated as proof that the command voltage was wrong.</li>
+<li><b>LoRa pin conflict avoidance:</b> the ESP32-S3 RA-02 test uses GPIO4/5/6 for SPI and GPIO7 for CS, leaving GPIO13/14/15 available for the BLDC control transistors.</li>
+<li><b>E-stop message logic:</b> the Pico transmitter sends <span class="mono">ESTOP,0,sequence</span> at startup/release and <span class="mono">ESTOP,1,sequence</span> while the LAY37 is pressed/open. The full non-LoRa BLDC file was restored as the default bench controller; LoRa integration remains in its own file.</li>
+<li><b>Steering test:</b> steering and brake pulse outputs were separated onto GPIO4&ndash;6 and GPIO10&ndash;12. Steering is represented as a 90&deg; software window centered at 0&deg;.</li>
+</ul>
+
+<h2>3. Pinout comparison: BLDC controller</h2>
+<table>
+<tr><th>Signal</th><th>Earlier test mapping</th><th>Current mapping</th><th>Reason / note</th></tr>
+<tr><td>Enable (EN)</td><td>GPIO13</td><td><b>GPIO14</b></td><td>Moved when BRK and EN were exchanged.</td></tr>
+<tr><td>Brake (BRK)</td><td>GPIO14</td><td><b>GPIO13</b></td><td>Current transistor wiring and firmware mapping.</td></tr>
+<tr><td>Forward/Reverse (F/R)</td><td>GPIO15</td><td><b>GPIO15</b></td><td>Unchanged.</td></tr>
+<tr><td>GP8630N SDA/SCL</td><td colspan="2"><b>SDA GPIO8, SCL GPIO9</b></td><td>I2C address 0x58; output is used for BLD-750 SV.</td></tr>
+<tr><td>BLD-750 SV</td><td colspan="2"><b>GP8630N OUT &rarr; SV; GP8630N GND &rarr; COM</b></td><td>Signal-level bench connection.</td></tr>
+</table>
+
+<h2>4. Pinout comparison: RA-02 LoRa</h2>
+<table>
+<tr><th>RA-02 signal</th><th>Original ESP32-S3 mapping</th><th>Current combined-test ESP32-S3 mapping</th><th>Pico 2 mapping</th></tr>
+<tr><td>3.3V / GND</td><td>3V3 / GND</td><td>3V3 / GND</td><td>3V3(OUT) / GND</td></tr>
+<tr><td>NSS / CS</td><td>GPIO16</td><td><b>GPIO7</b></td><td>GP17</td></tr>
+<tr><td>SCK</td><td>GPIO14</td><td><b>GPIO4</b></td><td>GP18</td></tr>
+<tr><td>MOSI</td><td>GPIO13</td><td><b>GPIO5</b></td><td>GP19</td></tr>
+<tr><td>MISO</td><td>GPIO15</td><td><b>GPIO6</b></td><td>GP16</td></tr>
+<tr><td>RESET</td><td>GPIO10</td><td>GPIO10</td><td>GP20</td></tr>
+<tr><td>DIO0</td><td>GPIO18</td><td>GPIO18</td><td>GP21</td></tr>
+</table>
+<p class="small">The alternate ESP32-S3 radio mapping prevents RA-02 SPI from sharing the BLDC transistor pins 13, 14, and 15. All RA-02 wiring is 3.3 V only, with common ground and local decoupling recommended.</p>
+
+<div class="page-break"></div>
+<h2>5. Pinout comparison: steering, brake, and E-stop</h2>
+<table>
+<tr><th>Function</th><th>ESP32-S3 pin</th><th>Driver / switch connection</th><th>Current test meaning</th></tr>
+<tr><td>Steering STEP</td><td>GPIO4</td><td>Steering TB6600 PUL+</td><td>Pulse output</td></tr>
+<tr><td>Steering DIR</td><td>GPIO5</td><td>Steering TB6600 DIR+</td><td>Direction output</td></tr>
+<tr><td>Steering ENABLE</td><td>GPIO6</td><td>Steering TB6600 ENA+</td><td>Active-low in test file</td></tr>
+<tr><td>Brake STEP</td><td>GPIO10</td><td>Brake TB6600 PUL+</td><td>Pulse output</td></tr>
+<tr><td>Brake DIR</td><td>GPIO11</td><td>Brake TB6600 DIR+</td><td>Direction output</td></tr>
+<tr><td>Brake ENABLE</td><td>GPIO12</td><td>Brake TB6600 ENA+</td><td>Active-low in test file</td></tr>
+<tr><td>LAY37 E-stop input</td><td>Pico 2 GP22</td><td>COM &rarr; GND; NC &rarr; GP22; 4.7 k&Omega; GP22 &rarr; 3.3 V</td><td>NC closed = LOW/healthy; NC open = HIGH/stop</td></tr>
+</table>
+<p class="small">The steering test is open-loop: it assumes the mechanism starts physically centered and does not have an absolute position sensor. Confirm the gear ratio before relying on the displayed angle.</p>
+
+<h2>6. Errors and issues encountered</h2>
+<table>
+<tr><th>Observed issue</th><th>Cause / interpretation</th><th>Resolution or lesson</th></tr>
+<tr><td><span class="mono">mpremote: failed to access ... may be in use</span></td><td>Thonny, a REPL, or another Python process owned the serial device.</td><td>Close the serial monitor, then check <span class="mono">lsof /dev/ttyACM0</span> or <span class="mono">lsof /dev/ttyUSB0</span> before reconnecting.</td></tr>
+<tr><td><span class="mono">could not enter raw repl</span>, <span class="mono">b''</span></td><td>The board was busy running code, the port was locked, or the image/board state was not suitable for raw REPL.</td><td>Reset the board, use one serial client at a time, and confirm MicroPython is installed on the correct board.</td></tr>
+<tr><td>Wrong or missing serial port</td><td>ACM/USB names are assigned dynamically; bootloader mode can appear as a mass-storage device instead of a serial port.</td><td>Rediscover the port after reconnecting. Do not assume ACM0, ACM1, or ttyUSB0 is permanent.</td></tr>
+<tr><td>MicroPython <span class="mono">ImportError: no module named 'network'</span></td><td>Code intended for ESP32 was run on a board/image without the expected ESP32 networking module, or the wrong device was selected.</td><td>Match the firmware and script to the board; keep ESP32 and Pico files separate.</td></tr>
+<tr><td>RP2 bootloader had no <span class="mono">/dev/ttyACM*</span></td><td>Pico 2 was still in RP2 UF2 bootloader mass-storage mode.</td><td>Copy the UF2, allow the board to reboot, then look for the new serial device.</td></tr>
+<tr><td>RA-02 packets not initially seen</td><td>Radio pin mapping, serial-port selection, one-shot timing, and receiver state were being tested simultaneously.</td><td>Use the standalone receiver/transmitter tests first and verify SX1278 version 0x12 and explicit packets.</td></tr>
+<tr><td>Integrated LoRa test stopped with <span class="mono">name 'reason' isn't defined</span></td><td>A handler/error-path variable was referenced before definition in the combined controller.</td><td>Keep the stable non-LoRa BLDC controller separate while the integrated file is repaired and retested.</td></tr>
+<tr><td>Motor stopped during slow-speed testing</td><td>Control pin changes, throttle ramp/watchdog behavior, and controller response were being changed during the same test sequence.</td><td>Stabilize the pin mapping first; test voltage/ramp/direction independently with wheels off the ground.</td></tr>
+<tr><td>CW and CCW speed differed substantially</td><td>Potential motor/controller wiring, mechanical load, direction input, or drive-stage asymmetry; not enough evidence to attribute it only to target SV.</td><td>Measure actual SV in both directions and inspect motor phases, F/R logic, brake release, and mechanical load.</td></tr>
+</table>
+
+<h2>7. Validation summary</h2>
+<table>
+<tr><th>Test</th><th>Evidence from the work</th><th>Status</th></tr>
+<tr><td>ESP32-S3 BLDC bench controller</td><td>User reported the BLDC became stable after the pin/firmware corrections; current file is the default non-LoRa test.</td><td><span class="good">Bench working</span></td></tr>
+<tr><td>Pico 2 + RA-02 E-stop transmitter</td><td>Pico button state and <span class="mono">ESTOP,1,sequence</span> transmission were observed.</td><td><span class="good">Radio-side test working</span></td></tr>
+<tr><td>ESP32-S3 + RA-02 receiver</td><td>Standalone receive test was used to isolate the link; integrated full BLDC behavior still requires a clean end-to-end test.</td><td><span class="warn">Continue integration</span></td></tr>
+<tr><td>Steering angle accuracy</td><td>Software range is -45&deg; to +45&deg;, but the test is open-loop and the current file still requires the real gear ratio to be confirmed.</td><td><span class="warn">Needs calibration</span></td></tr>
+</table>
+
+<h2>8. Recommended next test</h2>
+<ol>
+<li>Keep the BLDC controller on <span class="mono">bench/full_bldc_test.py</span> and verify BRK/EN/F-R transistor logic at zero target voltage.</li>
+<li>Run the Pico transmitter and ESP32 receiver alone; print every received packet before connecting the BLDC control loop.</li>
+<li>Test only two E-stop transitions: startup/release packet <span class="mono">ESTOP,0</span>, then pressed packet <span class="mono">ESTOP,1</span>. Confirm brake application and red UI state.</li>
+<li>Only after that, combine radio handling with the controller and test at low target SV, with wheels lifted and a physical power cut available.</li>
+</ol>
+
+<div class="footer">Source files: <span class="mono">bench/full_bldc_test.py</span>, <span class="mono">bench/full_bldc_lora_estop_esp32s3.py</span>, <span class="mono">bench/pico2_ra02_estop_transmitter.py</span>, <span class="mono">bench/steering_brake_test.py</span>, and the wiring notes in <span class="mono">docs/</span>. Repository history reviewed through commit <span class="mono">4abfe30</span>.</div>
+</body>
+</html>
