@@ -77,7 +77,7 @@ FR_PIN = 15
 # THROTTLE LIMIT
 # ----------------------------
 
-MAX_VOLTAGE = 3.00
+MAX_VOLTAGE = 5.00
 
 RAMP_STEP = 0.05
 RAMP_DELAY_MS = 40
@@ -339,14 +339,12 @@ def safe_stop(reason="SAFE STOP"):
     global current_voltage
 
     print()
-    print("!!!", reason, "!!!")
 
+    print("!!!", reason, "!!!")
 
     # First remove throttle request
     target_voltage = 0.0
 
-
-    # Attempt immediate analog zero
     try:
 
         write_voltage(0.0)
@@ -358,8 +356,6 @@ def safe_stop(reason="SAFE STOP"):
             e
         )
 
-
-    # Hardware control inputs provide another stopping layer
     brake_apply()
 
     enable_stop()
@@ -463,6 +459,8 @@ h1 {
 .slider {
     width: 95%;
     margin: 25px 0 35px 0;
+    cursor: pointer;
+    touch-action: pan-x;
 }
 
 .row {
@@ -557,9 +555,9 @@ V
 <input
 type="range"
 min="0"
-max="300"
+max="500"
 value="0"
-step="5"
+step="1"
 class="slider"
 id="slider"
 oninput="speedChanged()"
@@ -653,6 +651,8 @@ WHEELS OFF GROUND
 
 let enRunning = false;
 let brakeReleased = false;
+let speedRequestInFlight = false;
+let speedRequestPending = false;
 
 
 function setStatus(text) {
@@ -694,17 +694,39 @@ function speedChanged() {
         voltage.toFixed(2);
 
 
-    if(
-        enRunning &&
-        brakeReleased
-    ) {
-
-        fetch(
-            "/speed?v=" +
-            voltage
-        );
-
+    if(enRunning && brakeReleased) {
+        speedRequestPending = true;
+        sendLatestSpeed();
     }
+
+}
+
+
+function sendLatestSpeed() {
+
+    if(
+        !enRunning ||
+        !brakeReleased ||
+        speedRequestInFlight ||
+        !speedRequestPending
+    ) {
+        return;
+    }
+
+    let slider = document.getElementById("slider");
+    let voltage = slider.value / 100;
+
+    speedRequestPending = false;
+    speedRequestInFlight = true;
+
+    fetch("/speed?v=" + voltage)
+        .catch(function() {})
+        .finally(function() {
+            speedRequestInFlight = false;
+            if(speedRequestPending) {
+                setTimeout(sendLatestSpeed, 50);
+            }
+        });
 
 }
 
@@ -864,7 +886,6 @@ setInterval(
     400
 );
 
-
 window.addEventListener(
     "beforeunload",
     function() {
@@ -997,7 +1018,6 @@ print(
 try:
 
     while True:
-
 
         # ====================================================
         # WEB REQUEST

@@ -92,6 +92,12 @@ bench/ra02_lora_chat_esp8266.py
 bench/ra02_lora_chat_esp32s3.py
 ```
 
+For the combined fail-stop bench test, upload
+`bench/pico2_ra02_estop_transmitter.py` to the Pico 2 and
+`bench/full_bldc_lora_estop_esp32s3.py` to the ESP32-S3. The ESP32 requires
+the shared `bench/ra02_lora_chat_common.py` module and will keep the BLD-750
+stopped until it receives a valid Pico heartbeat.
+
 ## Integrated firmware
 
 The main actuator controller is currently:

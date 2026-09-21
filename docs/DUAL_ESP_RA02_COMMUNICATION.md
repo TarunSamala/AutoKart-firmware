@@ -13,10 +13,10 @@ ESP32-S3 ── SPI ── RA-02 ))) 433 MHz LoRa ((( RA-02 ── SPI ── ES
 |---|---|
 | 3.3V | 3V3 |
 | GND | GND |
-| NSS/CS | GPIO16 |
-| SCK | GPIO14 |
-| MOSI | GPIO13 |
-| MISO | GPIO15 |
+| NSS/CS | GPIO7 |
+| SCK | GPIO4 |
+| MOSI | GPIO5 |
+| MISO | GPIO6 |
 | DIO0 | GPIO18 |
 | RESET | GPIO10 |
 
@@ -33,9 +33,11 @@ ESP32-S3 ── SPI ── RA-02 ))) 433 MHz LoRa ((( RA-02 ── SPI ── ES
 | DIO0 | D2 / GPIO4 |
 | RESET | D1 / GPIO5 |
 
-Both radios must use the same frequency and LoRa parameters. Keep antennas
-connected before transmitting. Use 3.3 V only, common ground, and local
-decoupling at each RA-02 (`100 nF` plus `10–100 µF`).
+Both radios must use the same frequency and LoRa parameters. The alternate
+ESP32-S3 SPI pins above keep GPIO13/14/15 available for the BLDC BRK/EN/F-R
+transistor controls. Keep antennas connected before transmitting. Use 3.3 V
+only, common ground, and local decoupling at each RA-02 (`100 nF` plus
+`10–100 µF`).
 
 The first firmware test should send a short `PING` packet from one board and
 return `PONG` from the other. Add sequence number, timeout, and CRC before
