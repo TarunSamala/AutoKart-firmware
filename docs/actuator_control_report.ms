@@ -149,8 +149,8 @@ E-stop:     latched; throttle zero, steering hold, brake apply; commands block
 full_bldc_test.py separately drives BLD750 digital inputs through PN2222A
 transistors. A GPIO high turns the transistor on and pulls the input low.
 .nf
-GPIO13 -> EN:  high/pulled low = RUN; low/open = STOP
-GPIO14 -> BRK: high/pulled low = brake released; low/open = quick brake
+GPIO13 -> BRK: high/pulled low = brake released; low/open = quick brake
+GPIO14 -> EN:  high/pulled low = RUN; low/open = STOP
 GPIO15 -> F/R: direction selection (software labels CW and CCW)
 .fi
 Its safe stop sets GP8630N to 0 V, applies the BLD750 brake, and stops enable.
@@ -180,4 +180,3 @@ critical position.
 Source basis: autokart_rc_v5_controlled_stop.py (primary), rc_bench.py (earlier
 bench controller), full_bldc_test.py (standalone BLD750 test), and wiring notes.
 .ft R
-

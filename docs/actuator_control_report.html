@@ -99,8 +99,8 @@ li { margin:2px 0; }
 <h2>6. Standalone BLD750 actuator test</h2>
 <p><code>full_bldc_test.py</code> is a separate direct-drive bench test. PN2222A transistors pull BLD750 control inputs low when their GPIO is high:</p>
 <table><tr><th>GPIO</th><th>BLD750 input</th><th>Function</th></tr>
-<tr><td>13</td><td>EN</td><td>High → transistor on → input low → RUN; low → STOP.</td></tr>
-<tr><td>14</td><td>BRK</td><td>High → input low → brake released; low/open → quick brake.</td></tr>
+<tr><td>13</td><td>BRK</td><td>High → input low → brake released; low/open → quick brake.</td></tr>
+<tr><td>14</td><td>EN</td><td>High → transistor on → input low → RUN; low → STOP.</td></tr>
 <tr><td>15</td><td>F/R</td><td>Direction selection; software labels states CW and CCW.</td></tr>
 </table>
 <p>That test applies a layered safe stop: command the GP8630N to 0 V, apply BLD750 brake, and stop/disable enable. Direction changes are allowed only in the full safe state.</p>
