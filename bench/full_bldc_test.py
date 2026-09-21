@@ -1,7 +1,8 @@
 import network
 import socket
 import time
-from machine import Pin, I2C
+from machine import Pin, I2C, SPI
+from ra02_lora_chat_common import SX1278
 
 
 # ============================================================
@@ -98,6 +99,23 @@ RAMP_DELAY_MS = 40
 #
 
 COMMAND_TIMEOUT_MS = 1500
+
+
+# ----------------------------
+# EXPLICIT LORA E-STOP INPUT
+# ----------------------------
+# This is an explicit-message bench mode. Missing radio packets do not stop
+# the controller. ESTOP,1 applies the stop; ESTOP,0 clears the red UI state.
+LORA_FREQUENCY = 433000000
+LORA_SCK = 4
+LORA_MOSI = 5
+LORA_MISO = 6
+LORA_CS = 7
+LORA_RESET = 10
+LORA_DIO0 = 18
+
+remote_estop_active = False
+last_estop_message = "NONE"
 
 
 # ============================================================
@@ -339,6 +357,48 @@ def safe_stop(reason="SAFE STOP"):
     global current_voltage
 
     print()
+
+
+def process_lora_estop():
+
+    global remote_estop_active
+    global last_estop_message
+
+    packet = lora_radio.receive()
+
+    if not packet:
+        return
+
+    try:
+        text = packet.decode().strip()
+        fields = text.split(",")
+
+        if len(fields) != 3 or fields[0] != "ESTOP":
+            return
+
+        state = int(fields[1])
+        int(fields[2])
+
+        if state not in (0, 1):
+            return
+
+    except Exception:
+        return
+
+    last_estop_message = text
+
+    if state == 1:
+
+        if not remote_estop_active:
+            remote_estop_active = True
+            safe_stop("REMOTE LORA E-STOP")
+
+        print("LORA ESTOP ACTIVE:", text)
+
+    else:
+
+        remote_estop_active = False
+        print("LORA ESTOP CLEARED:", text)
     print("!!!", reason, "!!!")
 
 
@@ -378,6 +438,33 @@ def safe_stop(reason="SAFE STOP"):
 write_voltage(0.0)
 
 print("SV -> 0.00 V")
+
+
+# ============================================================
+# EXPLICIT LORA E-STOP RADIO
+# ============================================================
+
+lora_spi = SPI(
+    2,
+    baudrate=2000000,
+    polarity=0,
+    phase=0,
+    sck=Pin(LORA_SCK),
+    mosi=Pin(LORA_MOSI),
+    miso=Pin(LORA_MISO)
+)
+
+lora_radio = SX1278(
+    lora_spi,
+    Pin(LORA_CS, Pin.OUT, value=1),
+    Pin(LORA_RESET, Pin.OUT, value=1),
+    LORA_FREQUENCY
+)
+
+lora_radio.begin()
+
+print("LORA E-STOP READY")
+print("RA-02 SPI: SCK4 MOSI5 MISO6 CS7 RST10 DIO18")
 
 
 # ============================================================
@@ -519,6 +606,25 @@ button {
     margin: 15px;
 }
 
+#estopOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: #d00000;
+    color: white;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    font-size: 42px;
+    font-weight: bold;
+}
+
+#estopOverlay small {
+    font-size: 20px;
+    margin-top: 18px;
+}
+
 .warning {
     margin-top: 30px;
     color: #ff7777;
@@ -530,6 +636,11 @@ button {
 
 
 <body>
+
+<div id="estopOverlay">
+REMOTE E-STOP ACTIVATED
+<small>Release the LAY37 switch to clear</small>
+</div>
 
 <div class="container">
 
@@ -664,6 +775,32 @@ function setStatus(text) {
     document.getElementById(
         "status"
     ).innerHTML = text;
+
+}
+
+
+function setRemoteEstop(active) {
+
+    let overlay = document.getElementById("estopOverlay");
+    overlay.style.display = active ? "flex" : "none";
+
+    if(active) {
+        enRunning = false;
+        brakeReleased = false;
+        setStatus("REMOTE E-STOP");
+    }
+
+}
+
+
+function pollRemoteEstop() {
+
+    fetch("/estop", {cache: "no-store"})
+        .then(function(response) { return response.text(); })
+        .then(function(state) {
+            setRemoteEstop(state.trim() === "ACTIVE");
+        })
+        .catch(function() {});
 
 }
 
@@ -890,6 +1027,9 @@ setInterval(
     400
 );
 
+setInterval(pollRemoteEstop, 200);
+pollRemoteEstop();
+
 
 window.addEventListener(
     "beforeunload",
@@ -1024,6 +1164,8 @@ try:
 
     while True:
 
+        process_lora_estop()
+
 
         # ====================================================
         # WEB REQUEST
@@ -1045,7 +1187,16 @@ try:
             # SAFE STOP
             # -----------------------------------------------
 
-            if "GET /safe_stop" in request:
+            if "GET /estop" in request:
+
+                send_response(
+                    client,
+                    "ACTIVE" if remote_estop_active else "CLEAR",
+                    "text/plain"
+                )
+
+
+            elif "GET /safe_stop" in request:
 
                 safe_stop(
                     "WEB SAFE STOP"
@@ -1070,15 +1221,26 @@ try:
                 # but motor cannot turn unless
                 # BRK is also released.
 
-                enable_run()
+                if remote_estop_active:
 
-                last_command_ms = time.ticks_ms()
+                    send_response(
+                        client,
+                        "REMOTE E-STOP ACTIVE",
+                        "text/plain",
+                        "409 Conflict"
+                    )
 
-                send_response(
-                    client,
-                    "EN RUN",
-                    "text/plain"
-                )
+                else:
+
+                    enable_run()
+
+                    last_command_ms = time.ticks_ms()
+
+                    send_response(
+                        client,
+                        "EN RUN",
+                        "text/plain"
+                    )
 
 
             # -----------------------------------------------
@@ -1114,7 +1276,10 @@ try:
                 # Do not release brake if throttle
                 # is already non-zero.
 
-                if current_voltage <= 0.01:
+                if (
+                    current_voltage <= 0.01 and
+                    not remote_estop_active
+                ):
 
                     brake_release()
 
@@ -1174,7 +1339,8 @@ try:
                     current_voltage <= 0.01 and
                     target_voltage <= 0.01 and
                     not en_running and
-                    not brake_released
+                    not brake_released and
+                    not remote_estop_active
                 ):
 
                     direction_cw()
@@ -1208,7 +1374,8 @@ try:
                     current_voltage <= 0.01 and
                     target_voltage <= 0.01 and
                     not en_running and
-                    not brake_released
+                    not brake_released and
+                    not remote_estop_active
                 ):
 
                     direction_ccw()
@@ -1250,7 +1417,8 @@ try:
 
                 if (
                     en_running and
-                    brake_released
+                    brake_released and
+                    not remote_estop_active
                 ):
 
                     target_voltage = voltage

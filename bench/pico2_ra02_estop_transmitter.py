@@ -27,16 +27,30 @@ radio = SX1278(spi, cs, reset, 433000000)
 radio.begin()
 
 print("PICO 2 LORA E-STOP TRANSMITTER READY")
-print("GP22 LOW=HEALTHY, HIGH=STOP/FAULT")
+print("GP22 LOW=RELEASED, HIGH=PRESSED/STOP")
 
 sequence = 0
+last_state = None
+clear_repeats = 0
 while True:
-    sequence = (sequence + 1) & 0xFFFF
     state = 1 if estop.value() else 0
-    packet = "ESTOP,{},{}".format(state, sequence)
-    try:
-        radio.send(packet)
-        print("TX:", packet)
-    except Exception as error:
-        print("RADIO TX ERROR:", error)
-    time.sleep_ms(200)
+    # Healthy state is not a heartbeat. Send ESTOP,0 only on startup or after
+    # release, and repeat that clear a few times so one lost packet cannot
+    # leave the red UI latched. Repeat ESTOP,1 while the switch is pressed.
+    if state != last_state:
+        last_state = state
+        clear_repeats = 5 if state == 0 else 0
+
+    if state == 1 or clear_repeats > 0:
+        sequence = (sequence + 1) & 0xFFFF
+        packet = "ESTOP,{},{}".format(state, sequence)
+        try:
+            radio.send(packet)
+            print("TX:", packet)
+            if state == 0:
+                clear_repeats -= 1
+        except Exception as error:
+            print("RADIO TX ERROR:", error)
+        time.sleep_ms(200 if state == 1 else 50)
+    else:
+        time.sleep_ms(50)
