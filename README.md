@@ -80,6 +80,18 @@ the emergency-stop input without transmitting or moving actuators.
 The ESP8266MOD RA-02 SPI wiring is documented in
 `docs/RA02_ESP8266_CONNECTIONS.md`.
 
+For the two-radio communication test, see
+`docs/DUAL_ESP_RA02_COMMUNICATION.md`. For the LAY37 emergency-stop wiring,
+see `docs/LAY37_ESTOP_CONNECTION.md`.
+
+The interactive LoRa text-chat files are:
+
+```text
+bench/ra02_lora_chat_common.py
+bench/ra02_lora_chat_esp8266.py
+bench/ra02_lora_chat_esp32s3.py
+```
+
 ## Integrated firmware
 
 The main actuator controller is currently:
