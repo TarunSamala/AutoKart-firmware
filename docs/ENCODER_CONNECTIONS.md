@@ -63,6 +63,50 @@ The magnet must be the correct diametrically magnetized type and centered over t
 
 ```text
 bench/as5600_esp32s3_test.py
+bench/as5600_brake_feedback_test.py
 bench/as5047p_esp32s3_test.py
 bench/as5600_pwm_rs485_receiver.py
 ```
+
+## AS5600 brake-feedback bring-up
+
+For the first brake test, use only the AS5600 and ESP32-S3. Do not connect
+the brake motor or allow the firmware to command the TB6600. The feedback
+test uses the same I2C pins as the GP8630N, but it is a standalone test and
+expects the AS5600 at address `0x36`.
+
+Flash `bench/as5600_brake_feedback_test.py` as `main.py`, then use:
+
+```text
+r       one reading
+stream  continuous raw angle and magnet status
+zero    capture the physically released brake position
+limit   capture the physically applied brake position
+save    save the calibration in the ESP32 filesystem
+status  show angle, span, direction, and brake percentage
+```
+
+The calibration creates a released reference and an applied span. The
+feedback percentage is calculated as:
+
+```text
+brake_percent = clamp((signed_angle - released_angle) / applied_span, 0, 1) * 100
+```
+
+The signed angle calculation handles the AS5600's 0/360 degree wraparound.
+The applied span also establishes whether the brake increases or decreases
+in encoder counts. A healthy reading requires the magnet-detected flag and
+no weak/strong magnet warning.
+
+### Planned closed-loop use
+
+1. Read encoder feedback at a fixed rate, such as 50-100 Hz.
+2. Compare commanded brake position with measured brake percentage.
+3. Use a small proportional correction to generate TB6600 step pulses.
+4. Stop stepping when the error is inside a deadband.
+5. Trigger a safe brake state if the magnet disappears, the reading jumps,
+   the encoder stops changing while the motor is moving, or the feedback is
+   outside the calibrated range.
+
+The current file intentionally stops at measurement and calibration. It does
+not yet close the loop or move the brake automatically.
