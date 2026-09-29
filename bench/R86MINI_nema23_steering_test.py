@@ -30,7 +30,7 @@ import time
 
 
 FIRMWARE_NAME = "r86mini-nema23-steering-test"
-FIRMWARE_VERSION = "1.1.0"
+FIRMWARE_VERSION = "1.2.0"
 
 # ESP32-S3 pins. ENA is intentionally not connected or controlled.
 STEP_PIN_NUMBER = 4
@@ -50,9 +50,11 @@ LEFT_DIR = 1 - RIGHT_DIR
 # The R86mini must be set to 3200 pulses per motor revolution.
 PULSES_PER_MOTOR_REV = 3200
 
-# Keep the current steering_brake_test.py calibration for this first test.
-# Change this only when the physical steering reduction is confirmed.
-STEERING_GEAR_RATIO = 1.0
+# Old steering transmission: 17T motor gear -> 51T steering gear = 3:1.
+# The motor must rotate 3 degrees for 1 degree at the steering shaft.
+MOTOR_GEAR_TEETH = 17
+STEERING_GEAR_TEETH = 51
+STEERING_GEAR_RATIO = STEERING_GEAR_TEETH / MOTOR_GEAR_TEETH
 PULSES_PER_STEERING_DEG = (
     PULSES_PER_MOTOR_REV * STEERING_GEAR_RATIO / 360.0
 )
@@ -60,12 +62,13 @@ PULSES_PER_STEERING_DEG = (
 STEERING_MIN_DEG = -45.0
 STEERING_MAX_DEG = 45.0
 
-# Adjustable pulse rate. The old steering_brake_test.py used 200 pps, which
-# is only 3.75 motor RPM at 3200 pulses/revolution. Start at 800 pps and allow
-# conservative bench adjustment from 100 to 1500 pps.
+# Adjustable pulse rate. Smooth acceleration/deceleration is used so the
+# motor is not commanded to start instantly at the selected maximum speed.
 MIN_PULSE_RATE_HZ = 100
-MAX_PULSE_RATE_HZ = 1500
-pulse_rate_hz = 800
+MAX_PULSE_RATE_HZ = 2500
+START_PULSE_RATE_HZ = 300
+pulse_rate_hz = 1500
+MAX_RAMP_STEPS = 200
 
 # Keep the active pulse comfortably longer than the driver's minimum while
 # changing speed through the inactive interval.
@@ -85,10 +88,24 @@ def current_angle():
 
 
 def pulse_steps(count):
-    period_us = 1_000_000 // pulse_rate_hz
-    step_low_us = max(1, period_us - STEP_HIGH_US)
+    ramp_steps = min(MAX_RAMP_STEPS, count // 2)
+    start_rate = min(START_PULSE_RATE_HZ, pulse_rate_hz)
 
-    for _ in range(count):
+    for step_index in range(count):
+        if ramp_steps:
+            steps_from_end = count - step_index - 1
+            ramp_position = min(step_index, steps_from_end, ramp_steps)
+            rate = start_rate + (
+                (pulse_rate_hz - start_rate)
+                * ramp_position
+                // ramp_steps
+            )
+        else:
+            rate = start_rate
+
+        period_us = 1_000_000 // max(1, rate)
+        step_low_us = max(1, period_us - STEP_HIGH_US)
+
         STEP.value(SIGNAL_ACTIVE)
         time.sleep_us(STEP_HIGH_US)
         STEP.value(SIGNAL_INACTIVE)
@@ -160,6 +177,10 @@ def steer(target_angle):
     print("POSITION:", round(current_angle(), 2), "deg")
 
 
+def steer_relative(delta_angle):
+    steer(current_angle() + float(delta_angle))
+
+
 def status():
     print()
     print("========================================")
@@ -170,7 +191,15 @@ def status():
     print("STEP / DIR GPIO   :", STEP_PIN_NUMBER, "/", DIR_PIN_NUMBER)
     print("ENA               : disconnected")
     print("Driver pulses/rev :", PULSES_PER_MOTOR_REV)
-    print("Gear ratio        :", STEERING_GEAR_RATIO)
+    print(
+        "Gear ratio        :",
+        MOTOR_GEAR_TEETH,
+        "T ->",
+        STEERING_GEAR_TEETH,
+        "T =",
+        round(STEERING_GEAR_RATIO, 2),
+        ":1",
+    )
     print("Pulses/degree     :", round(PULSES_PER_STEERING_DEG, 4))
     print("Pulse rate        :", pulse_rate_hz, "pps")
     print(
@@ -193,7 +222,11 @@ def help_text():
     print("  s 45    -> move to full right")
     print("  s -45   -> move to full left")
     print("  center  -> return to software center")
-    print("  speed 800  -> set pulse rate (100 to 1500 pps)")
+    print("  cw 5     -> move clockwise/right by 5 degrees")
+    print("  ccw 5    -> move counter-clockwise/left by 5 degrees")
+    print("  cw 45    -> move clockwise/right by 45 degrees")
+    print("  ccw 45   -> move counter-clockwise/left by 45 degrees")
+    print("  speed 1500 -> set maximum rate (100 to 2500 pps)")
     print("  status  -> show configuration and position")
     print("  help    -> show commands")
     print("  q       -> quit and force STEP inactive")
@@ -210,6 +243,7 @@ print("Physically center and unload/jack steering first.")
 print("R86mini: PUL+DIR, 3200 pulses/rev, ENA disconnected.")
 print("Initial current: 2.40 A peak; do not change DIP live.")
 print("Initial speed:", pulse_rate_hz, "pps")
+print("Steering reduction: 17T -> 51T = 3:1")
 print("Range: -45 deg to +45 deg, 0 deg center.")
 help_text()
 
@@ -235,6 +269,18 @@ try:
             except (ValueError, IndexError):
                 print("Example: speed 800")
 
+        elif command.lower().startswith("ccw "):
+            try:
+                steer_relative(-abs(float(command.split()[1])))
+            except (ValueError, IndexError):
+                print("Example: ccw 5 or ccw 45")
+
+        elif command.lower().startswith("cw "):
+            try:
+                steer_relative(abs(float(command.split()[1])))
+            except (ValueError, IndexError):
+                print("Example: cw 5 or cw 45")
+
         elif command.lower() == "q":
             break
 
@@ -245,7 +291,10 @@ try:
                 print("Example: s 5 or s -5")
 
         else:
-            print("Commands: s angle | speed pps | center | status | help | q")
+            print(
+                "Commands: s angle | cw deg | ccw deg | speed pps | "
+                "center | status | help | q"
+            )
 
 except KeyboardInterrupt:
     print("\nSTOPPED BY USER")
