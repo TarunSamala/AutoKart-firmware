@@ -65,8 +65,53 @@ The magnet must be the correct diametrically magnetized type and centered over t
 bench/as5600_esp32s3_test.py
 bench/as5600_brake_feedback_test.py
 bench/as5047p_esp32s3_test.py
+bench/as5047p_pwm_isolated_test.py
+bench/as5047p_enable_w_pwm_test.py
 bench/as5600_pwm_rs485_receiver.py
 ```
+
+## AS5047P isolated PWM test
+
+The AS5047P can provide absolute angle through a PWM output, but the PWM
+interface must be enabled in the sensor configuration. The output is
+available on `W/PWM` or `I/PWM`, depending on the `UVW_ABI` setting. The
+isolated test does not configure the sensor over SPI; it only measures the
+already-enabled PWM signal.
+
+Suggested test wiring:
+
+```text
+AS5047P W/PWM or module PWM -> ESP32-S3 GPIO4
+AS5047P GND                 -> ESP32-S3 GND
+AS5047P supply              -> voltage required by the breakout board
+```
+
+Do not connect a 5 V signal directly to an ESP32-S3 GPIO. If the board does
+not produce PWM, first configure `PWMon` and select the PWM output through the
+AS5047P SPI settings, or use the existing SPI test instead.
+
+For a board that has not been configured for PWM, use
+`bench/as5047p_enable_w_pwm_test.py`. It temporarily writes `SETTINGS1 =
+0x0081` over SPI: `PWMon=1` and `UVW_ABI=0`, which selects `W/PWM`. Add these
+connections for that setup test:
+
+```text
+AS5047P CSn   -> ESP32-S3 GPIO16
+AS5047P CLK   -> ESP32-S3 GPIO13
+AS5047P MOSI  -> ESP32-S3 GPIO14
+AS5047P MISO  -> ESP32-S3 GPIO15
+AS5047P W/PWM -> ESP32-S3 GPIO4
+```
+
+The setting is volatile and is lost after reset or power cycling. The test
+does not burn OTP or permanently change the encoder. `UVW_ABI=1` would select
+`I/PWM` instead. The AS5047P datasheet defines `PWMon` at bit 7 and the PWM
+output selection at bit 3 of `SETTINGS1`.
+
+Run `bench/as5047p_pwm_isolated_test.py` as `main.py`. It reports PWM high
+time, low time, period, frequency, duty cycle, 12-bit PWM raw angle data, and
+degrees. The AS5047P PWM frame is nominally 4119 clock periods; its angle data
+contains 0-4095 clocks, with a typical 444 ns clock period.
 
 ## AS5600 brake-feedback bring-up
 

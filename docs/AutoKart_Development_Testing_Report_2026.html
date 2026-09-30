@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoKart RC - Development, Testing &amp; Actuator Control Report</title>
+<meta name="author" content="AutoKart RC Project Team">
+<style>
+@page { size: Letter; margin: 0.68in 0.68in 0.65in; }
+* { box-sizing: border-box; }
+body { font-family: Georgia, "Liberation Serif", serif; color: #17212b; font-size: 9.4pt; line-height: 1.28; margin: 0; }
+h1 { color: #0a3558; font-size: 24pt; margin: 0 0 8px; border-bottom: 1.5px solid #2f6f9f; padding-bottom: 5px; }
+h2 { color: #0a3558; font-size: 15pt; margin: 17px 0 6px; border-bottom: 1px solid #2f6f9f; padding-bottom: 3px; }
+h3 { color: #0f466d; font-size: 11.5pt; margin: 11px 0 4px; }
+p { margin: 3px 0 7px; }
+ul, ol { margin: 4px 0 8px 18px; padding: 0; }
+li { margin: 2px 0; }
+.page { page-break-before: always; }
+.first { page-break-before: auto; }
+.header { text-align: right; color: #536574; font-size: 7.7pt; letter-spacing: 0.3px; margin-bottom: 26px; }
+.footer { color: #66727b; font-size: 7.5pt; text-align: center; margin-top: 18px; border-top: 0.5px solid #c4ced5; padding-top: 5px; }
+.title-main { color: #0a3558; font-size: 32pt; font-weight: bold; letter-spacing: 1px; margin-top: 45px; }
+.title-sub { color: #1e6287; font-size: 22pt; font-weight: bold; margin: 18px 0 10px; }
+.date { color: #52616e; font-size: 13pt; margin-bottom: 42px; }
+.box { background: #e6f0f5; border-left: 5px solid #1e6287; padding: 9px 11px; margin: 9px 0 13px; }
+.goodbox { background: #e6f3e9; border-left: 5px solid #3c8455; padding: 9px 11px; margin: 9px 0 13px; }
+.warnbox { background: #fff3d9; border-left: 5px solid #c48218; padding: 9px 11px; margin: 9px 0 13px; }
+.badbox { background: #f8e5e5; border-left: 5px solid #b94444; padding: 9px 11px; margin: 9px 0 13px; }
+.grid { width: 100%; border-collapse: collapse; margin: 6px 0 12px; page-break-inside: avoid; }
+.grid th { background: #235d86; color: white; text-align: left; font-weight: bold; padding: 5px 6px; border: 1px solid #244b65; }
+.grid td { padding: 4px 6px; border: 1px solid #9baab4; vertical-align: top; }
+.grid tr:nth-child(even) td { background: #f3f6f8; }
+.compact td, .compact th { padding: 3px 5px; font-size: 8.4pt; }
+.status-ok { color: #176637; font-weight: bold; }
+.status-open { color: #9a5a00; font-weight: bold; }
+.status-fail { color: #a12b2b; font-weight: bold; }
+.small { color: #52616e; font-size: 8.1pt; }
+.mono, code, pre { font-family: "Liberation Mono", "DejaVu Sans Mono", monospace; }
+pre { background: #f3f6f8; border: 1px solid #aebbc4; border-left: 5px solid #235d86; padding: 8px 10px; font-size: 7.8pt; line-height: 1.22; white-space: pre-wrap; margin: 6px 0 11px; page-break-inside: avoid; }
+pre.circuit { background: #fbfcfd; color: #102c40; font-size: 8.2pt; }
+.kicker { color: #52616e; font-size: 12pt; margin-bottom: 8px; }
+.two-col { width: 100%; border-collapse: separate; border-spacing: 10px; margin-top: 18px; }
+.two-col td { width: 50%; vertical-align: top; background: #f2f5f7; padding: 10px; }
+.metric { color: #0a3558; font-size: 13pt; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="first">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; DEVELOPMENT &amp; ACTUATOR TESTING</div>
+<div class="title-main">AUTOKART RC</div>
+<div class="title-sub">Development, Testing &amp; Actuator Control Report</div>
+<div class="date">30 July 2026 - 28 September 2026<br><span class="small">Follow-up revision covering work after 02 September 2026</span></div>
+<div class="box"><b>Purpose</b><br>Consolidated engineering record of AutoKart firmware changes, actuator and sensor bench tests, wiring decisions, observed faults, corrective actions, and current validation status. This revision extends the 02 September baseline through 28 September.</div>
+<table class="two-col">
+<tr><td><span class="metric">Steering</span><br>NEMA 23/TB6600 baseline<br>NEMA 34 + R86mini test added<br>Open-loop STEP/DIR/ENA</td><td><span class="metric">Brake</span><br>NEMA 23 + TB6600<br>GPIO10/11/12<br>Encoder feedback under evaluation</td></tr>
+<tr><td><span class="metric">Traction</span><br>BLD750 + BLDC<br>GP8630N speed command<br>3 V to 5 V test extension</td><td><span class="metric">Safety &amp; sensing</span><br>LoRa LAY37 E-stop bench path<br>IMU, AS5600, AS5047P<br>RS485 sensor-link prototype</td></tr>
+</table>
+<div class="warnbox"><b>Scope:</b> This document covers firmware, electronics, sensors, actuators, and physical bench/vehicle testing only.</div>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; EXECUTIVE SUMMARY</div>
+<h1>Executive Summary</h1>
+<div class="kicker">Engineering status as of 28 September 2026</div>
+<p>After the 02 September baseline, the project added direct IMU and encoder tests, a two-controller RS485 link, LoRa emergency-stop prototypes, revised BLDC transistor pin assignments, a 5 V traction-command test, and a NEMA 34/R86mini steering bench program.</p>
+<div class="goodbox"><b>Confirmed progress</b><br>The ESP32-S3 traction bench controller runs with BRK on GPIO13, EN on GPIO14, F/R on GPIO15, and a GP8630N limit of 5.00 V. Steering is smooth with the kart jacked or at low pulse rates. The LoRa transmitter and standalone receiver tests can exchange explicit <span class="mono">ESTOP,0</span> and <span class="mono">ESTOP,1</span> packets.</div>
+<div class="badbox"><b>Primary unresolved issues</b><br>Steering still stutters or slips under tyre load and begins to lose smoothness around 600-800 pulses/s in the recorded test. BLDC speed remains strongly asymmetric: counter-clockwise runs at substantially higher RPM than clockwise for the same requested voltage. The combined LoRa/BLDC implementation is not yet the default controller and still needs an end-to-end validation pass.</div>
+<h2>Key findings after 02 September</h2>
+<ul>
+<li>Direct MPU-9250/6500 detection required NCS held HIGH and the tested SDA/SCL wiring moved to GPIO11/GPIO12.</li>
+<li>RS485 communication worked after direction control and packet framing were corrected; early logs showed fragmented and corrupted packets.</li>
+<li>The remote LAY37 E-stop was kept electrically separate from actuator GPIO. Its state is transmitted by LoRa from the Pico 2 side.</li>
+<li>BLDC EN and BRK pins were swapped in firmware to match the transistor wiring: BRK GPIO13, EN GPIO14.</li>
+<li>The throttle ceiling changed from 3.00 V to 5.00 V, producing a significant RPM increase.</li>
+<li>The web slider changed from 0.05 V to 0.01 V steps and request coalescing was added to prevent an unresponsive UI.</li>
+<li>AS5600 I2C, AS5047P SPI/PWM, and brake-feedback calibration utilities were added as isolated tests.</li>
+<li>NEMA 34 + Rtelligent R86mini testing was added on 28 September with a conservative ramp and +/-20 degree limits.</li>
+</ul>
+<h2>Current default versus experimental files</h2>
+<table class="grid compact"><tr><th>Purpose</th><th>File</th><th>Status</th></tr>
+<tr><td>Default BLDC bench controller</td><td class="mono">bench/full_bldc_test.py</td><td class="status-ok">Working bench baseline; no LoRa</td></tr>
+<tr><td>LoRa + BLDC E-stop integration</td><td class="mono">bench/full_bldc_lora_estop_esp32s3.py</td><td class="status-open">Experimental; retest required</td></tr>
+<tr><td>NEMA 34 steering</td><td class="mono">bench/nema34_test.py</td><td class="status-open">Static validation passed; hardware test pending</td></tr>
+<tr><td>Integrated actuator controller</td><td class="mono">firmware/autokart_rc_v5_controlled_stop.py</td><td class="status-open">Open-loop steering/brake</td></tr></table>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; DATED DEVELOPMENT TIMELINE</div>
+<h1>Development Timeline</h1>
+<div class="kicker">User test log and Git history after 02 September</div>
+<table class="grid compact"><tr><th>Date</th><th>Change / test</th><th>Evidence and result</th></tr>
+<tr><td>04 Sep</td><td>Firmware repository initialized; IMU, ESP32-C3 firmware, RS485 tests and existing actuator files added.</td><td>Git commits <span class="mono">14fbad4</span> through <span class="mono">6e2a69f</span>.</td></tr>
+<tr><td>05 Sep</td><td>MPU-9250/6500 test corrected; AS5600 and AS5047P direct encoder tests added.</td><td><span class="mono">ed7b10f</span>, <span class="mono">989882d</span>, <span class="mono">b8e478d</span>. IMU commit recorded as working.</td></tr>
+<tr><td>07 Sep<br><span class="small">08 Sep user log</span></td><td>Pico 2 + RA-02 and ESP8266 + RA-02 tests added. Remote LAY37 E-stop path introduced.</td><td>Git: <span class="mono">58847c7</span>, <span class="mono">285bd0c</span>. User log: E-stop implemented through LoRa on 08 Sep; switch isolated from actuator controls.</td></tr>
+<tr><td>21 Sep</td><td>LoRa chat, transistor pin correction, 5 V BLDC test, smooth slider patch, architecture sheet, LoRa E-stop integration and isolation tests.</td><td>Git: <span class="mono">feca57a</span> through <span class="mono">4abfe30</span>.</td></tr>
+<tr><td>21 Sep</td><td>BLDC command ceiling changed from 3 V to 5 V.</td><td>Significant RPM increase. Counter-clockwise high RPM; clockwise much lower RPM.</td></tr>
+<tr><td>21 Sep</td><td>Steering disengaged from ground; pulse rate manipulated.</td><td>Smooth at low pulse rate; stuttering began around 600-800 pulses/s.</td></tr>
+<tr><td>22 Sep</td><td>Steering tested jacked and unjacked.</td><td>Jacked: smooth. Unjacked/on tyre load: stuttering or slipping.</td></tr>
+<tr><td>22 Sep</td><td>First follow-up firmware report generated.</td><td>Git commit <span class="mono">faf345f</span>.</td></tr>
+<tr><td>23 Sep</td><td>AS5600 brake feedback and isolated target-angle tools added; AS5047P PWM tests added.</td><td>Git: <span class="mono">208b1fb</span>, <span class="mono">97a04ed</span>, <span class="mono">11f188e</span>.</td></tr>
+<tr><td>28 Sep</td><td>NEMA 34 + Rtelligent R86mini steering test added.</td><td>Git commit <span class="mono">36f4a94</span>. Syntax and motion math validated; hardware result not yet recorded.</td></tr></table>
+<div class="box"><b>Date reconciliation</b><br>Git history begins on 04 September. The 08, 21 and 22 September observations above come from the project test log supplied for this revision. Git dates identify when code was committed; bench-test dates identify when hardware behavior was observed.</div>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; SYSTEM ARCHITECTURE</div>
+<h1>Current Bench Architecture</h1>
+<h2>Actuator command paths</h2>
+<pre class="circuit">                         Wi-Fi browser / laptop
+                                  |
+                                  v
+                             +-----------+
+                             | ESP32-S3  |
+                             +-----------+
+                              |    |    |
+            GPIO4/5/6 --------+    |    +-------- GPIO13/14/15
+                 |                 |                    |
+          R86mini or TB6600        |              PN2222A stages
+                 |                 |                    |
+      Steering NEMA 34/23          |              BLD750 BRK/EN/F-R
+                                   |
+                       GPIO8 SDA / GPIO9 SCL
+                                   |
+                              GP8630N DAC
+                                   |
+                            OUT -> BLD750 SV
+                                   |
+                             BLD750 -> BLDC
+
+       GPIO10/11/12 -> brake TB6600 -> brake stepper axis</pre>
+<h2>Isolated LoRa emergency-stop path</h2>
+<pre class="circuit">  Handheld / remote side                         Vehicle bench side
+
+  3.3 V -- 4.7 kOhm --+                         +-------------------+
+                       +-- Pico GP22              | ESP32-S3          |
+  GND -- LAY37 COM/NC -+       |                 | LoRa receiver     |
+                               v                 | packet processing |
+                         Pico 2 + RA-02  )))  ((( RA-02              |
+                         ESTOP,0 = clear          |                   |
+                         ESTOP,1 = stop           +---------+---------+
+                                                         |
+                                             SV=0, BRK applied, EN stop</pre>
+<p>The switch is electrically isolated from actuator-control GPIO: the only connection between remote and vehicle sides is the LoRa radio link. This reduces long emergency-switch wiring and prevents the handheld switch circuit from sharing actuator signal wires.</p>
+<div class="warnbox"><b>Integration limitation:</b> The current ESP32 RA-02 bench mapping uses GPIO4/5/6 and GPIO10. Those pins overlap steering and brake controls. It is valid for the BLDC-only LoRa bench test, but it is not a conflict-free full-vehicle pinout.</div>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; COMMUNICATION CIRCUITS</div>
+<h1>Communication &amp; Sensor Test Circuits</h1>
+<h2>ESP32-C3 to ESP32-S3 RS485 bench link</h2>
+<pre class="circuit"> XIAO ESP32-C3                 CAT5e twisted pair                  ESP32-S3
+
+ GPIO21 TX -> MAX3485 RX     A ============================== A   MAX3485 RX <- GPIO17 TX
+ GPIO20 RX <- MAX3485 TX     B ============================== B   MAX3485 TX -> GPIO18 RX
+ GPIO10    -> MAX3485 EN     GND/reference ---------------- GND   MAX3485 EN <- GPIO16
+
+ Direction: EN HIGH = transmit; EN LOW = receive
+ UART: 9600 baud, 8-N-1
+ Test protocol: PING,sequence <-> PONG,sequence</pre>
+<p><b>Why these pins:</b> XIAO GPIO20/21 correspond to exposed RX/TX labels; GPIO10 controls transceiver direction. ESP32-S3 GPIO17/18 form a separate UART pair and GPIO16 controls direction. Module labels describe module signal direction, so MCU TX connects to module RX/RXO.</p>
+<h2>Standalone encoder connections</h2>
+<table class="grid compact"><tr><th>Encoder/interface</th><th>ESP32-S3 pins</th><th>Reason and limitation</th></tr>
+<tr><td>AS5600 I2C</td><td>SDA GPIO8, SCL GPIO9</td><td>Can share I2C with GP8630N because addresses differ: 0x36 and 0x58.</td></tr>
+<tr><td>AS5047P SPI</td><td>SCK13, MOSI14, MISO15, CS16</td><td>Contiguous test map. Conflicts with BLDC GPIO13/14/15; isolated only.</td></tr>
+<tr><td>AS5047P PWM</td><td>W/PWM or I/PWM -> GPIO4</td><td>Simple pulse capture after PWM enable. Conflicts with steering STEP.</td></tr>
+<tr><td>MPU-9250/6500</td><td>NCS10, SDA11, SCL12</td><td>NCS HIGH selects I2C. Overlaps brake pins; standalone only.</td></tr></table>
+<h2>Signal requirements</h2>
+<ul><li>Use a diametrically magnetized magnet centered over the encoder IC.</li><li>AS5600 raw 0-4095 maps to 0-360 degrees.</li><li>AS5047P SPI provides 14-bit angle; PWM must be enabled through SETTINGS1.</li><li>All ESP32-S3 inputs must remain within 3.3 V logic limits.</li></ul>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; PINOUTS AND RATIONALE</div>
+<h1>ESP32-S3 Pinout Matrix</h1>
+<div class="kicker">Current integrated functions and isolated-test overlaps</div>
+<table class="grid compact"><tr><th>GPIO</th><th>Current integrated role</th><th>Bench-test role(s)</th><th>Selection rationale / conflict</th></tr>
+<tr><td>4</td><td>Steering STEP</td><td>RA-02 SCK; AS5047P PWM; NEMA34 STEP</td><td>Reused for steering replacement test. Radio/encoder isolated only.</td></tr>
+<tr><td>5</td><td>Steering DIR</td><td>RA-02 MOSI; NEMA34 DIR</td><td>Grouped with GPIO4/6 for STEP/DIR/ENA.</td></tr>
+<tr><td>6</td><td>Steering ENA</td><td>RA-02 MISO; NEMA34 ENA</td><td>Radio conflict in full integration.</td></tr>
+<tr><td>7</td><td>Unassigned</td><td>RA-02 NSS/CS</td><td>Selected to keep BLDC transistor pins free.</td></tr>
+<tr><td>8</td><td>GP8630N SDA</td><td>AS5600 SDA</td><td>Shared I2C possible; unique addresses.</td></tr>
+<tr><td>9</td><td>GP8630N SCL</td><td>AS5600 SCL</td><td>Shared I2C clock.</td></tr>
+<tr><td>10</td><td>Brake STEP</td><td>RA-02 RESET; IMU NCS</td><td>Bench-only conflict if brake is present.</td></tr>
+<tr><td>11</td><td>Brake DIR</td><td>IMU SDA</td><td>Standalone IMU overlap.</td></tr>
+<tr><td>12</td><td>Brake ENA</td><td>IMU SCL</td><td>Standalone IMU overlap.</td></tr>
+<tr><td>13</td><td>BLD750 BRK</td><td>AS5047P SCK</td><td>Physical transistor wiring; encoder SPI conflict.</td></tr>
+<tr><td>14</td><td>BLD750 EN</td><td>AS5047P MOSI</td><td>Changed from earlier EN13/BRK14.</td></tr>
+<tr><td>15</td><td>BLD750 F/R</td><td>AS5047P MISO</td><td>Traction direction; encoder conflict.</td></tr>
+<tr><td>16</td><td>Available</td><td>RS485 EN; AS5047P CS</td><td>Bench direction/CS output.</td></tr>
+<tr><td>17</td><td>Available</td><td>RS485 TX</td><td>Dedicated UART bench link.</td></tr>
+<tr><td>18</td><td>Available</td><td>RS485 RX; RA-02 DIO0</td><td>Conflict if both links are connected.</td></tr></table>
+<div class="badbox"><b>Pin-budget conclusion:</b> Tested pinouts are individually valid but are not yet one conflict-free vehicle pinout. A frozen GPIO allocation and power/current budget are required before full integration.</div>
+<h2>BLD750 mapping change</h2>
+<table class="grid compact"><tr><th>Signal</th><th>Before 21 Sep</th><th>Current</th><th>Reason</th></tr><tr><td>EN</td><td>GPIO13</td><td>GPIO14</td><td>Corrected to match transistor wiring.</td></tr><tr><td>BRK</td><td>GPIO14</td><td>GPIO13</td><td>Swapped with EN.</td></tr><tr><td>F/R</td><td>GPIO15</td><td>GPIO15</td><td>Unchanged.</td></tr></table>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; LORA E-STOP PINOUTS</div>
+<h1>LoRa E-Stop Pinouts &amp; Logic</h1>
+<h2>Pico 2 remote transmitter</h2>
+<table class="grid compact"><tr><th>Signal</th><th>Pico 2</th><th>Role</th></tr><tr><td>MISO</td><td>GP16</td><td>SPI receive</td></tr><tr><td>NSS/CS</td><td>GP17</td><td>SPI chip select</td></tr><tr><td>SCK</td><td>GP18</td><td>SPI clock</td></tr><tr><td>MOSI</td><td>GP19</td><td>SPI transmit</td></tr><tr><td>RESET</td><td>GP20</td><td>Radio reset</td></tr><tr><td>DIO0</td><td>GP21</td><td>Packet status</td></tr><tr><td>LAY37 NC</td><td>GP22</td><td>Switch input with 4.7 kOhm pull-up</td></tr></table>
+<pre class="circuit">Pico GP22 ---- LAY37 NC contact ---- GND
+Pico GP22 ---- 4.7 kOhm resistor ---- 3.3 V
+
+NC closed / released : GPIO22 LOW  -> ESTOP,0
+NC open / pressed    : GPIO22 HIGH -> ESTOP,1
+Broken switch wire   : GPIO22 HIGH -> STOP indication</pre>
+<h2>ESP32-S3 receiver for BLDC-only bench test</h2>
+<table class="grid compact"><tr><th>RA-02</th><th>ESP32-S3</th><th>Rationale</th></tr><tr><td>SCK</td><td>GPIO4</td><td>Avoid BLDC GPIO13/14/15.</td></tr><tr><td>MOSI</td><td>GPIO5</td><td>Alternate SPI.</td></tr><tr><td>MISO</td><td>GPIO6</td><td>Alternate SPI.</td></tr><tr><td>NSS/CS</td><td>GPIO7</td><td>Free chip select.</td></tr><tr><td>RESET</td><td>GPIO10</td><td>Free in BLDC-only test.</td></tr><tr><td>DIO0</td><td>GPIO18</td><td>Packet status.</td></tr></table>
+<h2>Message logic change</h2>
+<pre>state = 1 if estop.value() else 0
+packet = "ESTOP,{},{}".format(state, sequence)
+
+ESTOP,0,n  -> released / clear red UI
+ESTOP,1,n  -> command stop and brake</pre>
+<p>The first design used a continuous healthy heartbeat and stopped whenever packets were delayed. Bench delays caused false stops. The bench logic changed to explicit stop/clear messages so plugging or unplugging the Pico does not independently raise the red screen. This is diagnostic behavior, not fail-safe radio-loss behavior.</p>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; BLDC DEVELOPMENT</div>
+<h1>BLDC Control Changes</h1>
+<h2>21 September: 3 V to 5 V test</h2>
+<pre>BRK_PIN = 13
+EN_PIN  = 14
+FR_PIN  = 15
+
+MAX_VOLTAGE = 5.00
+RAMP_STEP = 0.05
+RAMP_DELAY_MS = 40
+COMMAND_TIMEOUT_MS = 1500</pre>
+<table class="grid"><tr><th>Change</th><th>Observation</th><th>Interpretation</th></tr><tr><td>SV ceiling increased from 3.00 V to 5.00 V.</td><td>Significant RPM increase.</td><td>GP8630N/BLD750 path responds to larger voltage.</td></tr><tr><td>Direction changed through F/R.</td><td>CCW high RPM; CW much lower RPM.</td><td>Open: check actual SV, F/R level, brake release, Hall/phase wiring, controller parameters and load.</td></tr><tr><td>Slider changed to 0.01 V steps with request coalescing.</td><td>More responsive while dragging.</td><td>Only latest value is sent after prior HTTP request.</td></tr></table>
+<h2>Slider request logic</h2>
+<pre>if (enRunning &amp;&amp; brakeReleased) {
+    speedRequestPending = true;
+    sendLatestSpeed();
+}
+if (speedRequestInFlight || !speedRequestPending) return;</pre>
+<h2>Safe-stop sequence</h2>
+<pre>target_voltage = 0.0
+write_voltage(0.0)
+brake_apply()
+enable_stop()</pre>
+<div class="warnbox"><b>Validation boundary:</b> A 5 V software limit does not prove maximum motor speed or both directions are safe. Directional RPM asymmetry remains open.</div>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; STEERING DEVELOPMENT</div>
+<h1>Steering Test Results</h1>
+<h2>21-22 September observations</h2>
+<table class="grid"><tr><th>Condition</th><th>Observation</th><th>Engineering meaning</th></tr><tr><td>Disengaged / low pulse rate</td><td class="status-ok">Smooth.</td><td>Basic STEP/DIR and driver/motor wiring work at low demand.</td></tr><tr><td>Approximately 600-800 pulses/s</td><td class="status-fail">Stuttering begins.</td><td>Possible torque drop, acceleration, current limit, supply sag, resonance or binding.</td></tr><tr><td>Kart jacked</td><td class="status-ok">Smooth steering.</td><td>Mechanism moves without tyre scrub load.</td></tr><tr><td>Kart unjacked / tyres loaded</td><td class="status-fail">Stuttering or slipping.</td><td>Torque margin is below stationary tyre/load requirement or friction is excessive.</td></tr></table>
+<h2>28 September NEMA 34 / R86mini configuration</h2>
+<pre>PULSES_PER_MOTOR_REV = 3200
+MOTOR_GEAR_TEETH = 17
+STEERING_GEAR_TEETH = 34
+GEAR_RATIO = 34 / 17                 # 2.0
+PULSES_PER_STEERING_DEG = 17.7778
+
+LEFT_LIMIT_DEG  = -20.0
+RIGHT_LIMIT_DEG =  20.0
+START_PERIOD_US = 3000               # 333 pulses/s
+FAST_PERIOD_US  = 1200               # 833 pulses/s
+STEP_HIGH_US    = 10</pre>
+<table class="grid compact"><tr><th>Output</th><th>ESP32-S3</th><th>R86mini</th><th>Note</th></tr><tr><td>STEP</td><td>GPIO4</td><td>PUL</td><td>10 us active pulse.</td></tr><tr><td>DIR</td><td>GPIO5</td><td>DIR</td><td>30 us setup.</td></tr><tr><td>ENABLE</td><td>GPIO6</td><td>ENA</td><td>Code assumes optocoupler ON disables.</td></tr></table>
+<div class="badbox"><b>Electrical warning:</b> Confirm the exact R86mini input-level specification and polarity for the installed revision. Set SW1-SW3 from the NEMA 34 nameplate current, verify coil pairs, and use the separate motor supply. Position remains open-loop.</div>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; SENSOR DEVELOPMENT</div>
+<h1>IMU &amp; Encoder Development</h1>
+<h2>MPU-9250 / MPU-6500</h2>
+<table class="grid compact"><tr><th>Date</th><th>Problem / change</th><th>Result</th></tr><tr><td>04 Sep</td><td>I2C scan returned no devices on GPIO8/9. NCS/address mode uncertain.</td><td>MPU not detected.</td></tr><tr><td>05 Sep</td><td>SDA11, SCL12, NCS10 HIGH, AD0 GND; WHO_AM_I accepts 0x71/0x70.</td><td>Committed as working IMU test.</td></tr></table>
+<h2>AS5600 isolated angle processing</h2>
+<pre>def shortest_raw_delta(current_raw, target_raw):
+    return ((target_raw - current_raw + 2048) % 4096) - 2048
+
+angle_deg = raw * 360.0 / 4096.0</pre>
+<p>The isolated tool prints raw data, filtered angle, magnet status, and the shortest clockwise/counter-clockwise move to an entered angle. The brake-feedback utility captures released zero and applied span, then reports 0-100% feedback. Neither tool moves a motor.</p>
+<h2>AS5047P PWM bring-up</h2>
+<pre>SETTINGS1 = 0x0018
+SETTINGS1_W_PWM_ON = 0x0081
+
+SPI: SCK13, MOSI14, MISO15, CS16
+PWM: W/PWM -> GPIO4</pre>
+<p>W/PWM produced a high pulse followed by no low edge (<span class="mono">high=12889, low=-2</span>); I/PWM produced no valid edge (<span class="mono">high=-1, low=-2</span>). PWM was not selected/enabled. The helper now writes volatile SETTINGS1 and measures W/PWM.</p>
+<div class="warnbox"><b>Integration status:</b> Encoder feedback is not yet merged into steering or brake loops. Integrated position remains open-loop pulse count.</div>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; ERRORS AND RESOLUTIONS</div>
+<h1>Errors Faced During Bring-up</h1>
+<table class="grid compact"><tr><th>Date</th><th>Error / symptom</th><th>Cause / diagnosis</th><th>Action / status</th></tr>
+<tr><td>04-05 Sep</td><td>IMU scan empty; MPU not found.</td><td>Pins/mode did not match board; NCS needed for I2C.</td><td>Moved pins, held NCS HIGH, checked AD0/WHO_AM_I.</td></tr>
+<tr><td>04 Sep</td><td>RS485 split, blank or 0x00/0xFF packets.</td><td>Half-duplex direction timing and buffering.</td><td>Direction control and explicit PING/PONG parsing; CRC still needed.</td></tr>
+<tr><td>04-08 Sep</td><td><span class="mono">mpremote ... may be in use</span>.</td><td>VS Code/Thonny/Electron or Python owned serial.</td><td>One serial client; inspect with lsof/fuser.</td></tr>
+<tr><td>07 Sep</td><td>Pico RP2 Boot but no ttyACM.</td><td>UF2 bootloader mass-storage mode.</td><td>Copy correct Pico 2 UF2, reboot, rediscover port.</td></tr>
+<tr><td>07 Sep</td><td>Thonny Python: no module mpremote.</td><td>Different Python environment.</td><td>Activate project Python; avoid bundled Thonny interpreter.</td></tr>
+<tr><td>07-08 Sep</td><td>ESP8266 raw REPL failure; ttyUSB0 locked.</td><td>Running main.py or another process owned port.</td><td>Stop loop, release port, reset and reconnect.</td></tr>
+<tr><td>21 Sep</td><td><span class="mono">ImportError: no module named network</span>.</td><td>ESP32 file executed on Pico/wrong ACM device.</td><td>Identify board by platform, not ACM number.</td></tr>
+<tr><td>21 Sep</td><td>LoRa heartbeat delay repeatedly stopped BLDC.</td><td>Timeout too sensitive to packet latency/loss.</td><td>Bench sender changed to explicit ESTOP,0/1; link-loss policy open.</td></tr>
+<tr><td>21 Sep</td><td><span class="mono">name 'reason' isn't defined</span>.</td><td>Safe-stop code displaced during merge.</td><td>Restored default non-LoRa BLDC; kept LoRa separate.</td></tr>
+<tr><td>21 Sep</td><td>Pico TX visible; ESP32 did not process packets.</td><td>Radio processing and web/control loop not reliably integrated.</td><td>Standalone one-shot TX/RX tests added.</td></tr>
+<tr><td>21 Sep</td><td>BLDC slider unresponsive.</td><td>Overlapping HTTP requests while dragging.</td><td>One request in flight; latest value pending; 0.01 V step.</td></tr>
+<tr><td>21 Sep</td><td>CW/CCW RPM differed greatly.</td><td>F/R, controller, wiring, load or actual SV difference.</td><td class="status-open">Open; measure both directions.</td></tr></table>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; ERRORS AND RESOLUTIONS</div>
+<h1>Errors Faced During Bring-up</h1>
+<div class="kicker">Continued</div>
+<table class="grid compact"><tr><th>Date</th><th>Error / symptom</th><th>Cause / diagnosis</th><th>Action / status</th></tr>
+<tr><td>21-22 Sep</td><td>Steering smooth jacked; stutters/slips unjacked and near 600-800 pulses/s.</td><td>Torque margin, current, voltage sag, acceleration, resonance or friction.</td><td class="status-open">Open. NEMA34/R86mini path added.</td></tr>
+<tr><td>23 Sep</td><td>AS5047P W/PWM high/no low edge; I/PWM no edges.</td><td>PWM not selected/enabled; output remained UVW/ABI.</td><td>SPI helper writes volatile SETTINGS1=0x0081.</td></tr>
+<tr><td>28 Sep</td><td>Could not overwrite main.py; old AS5047 prompt blocked raw REPL.</td><td>Old input loop caught Ctrl-C.</td><td>Enter q, return to &gt;&gt;&gt;, exit Ctrl-], then copy NEMA file.</td></tr>
+<tr><td>Ongoing</td><td>ttyACM0/ttyACM1 identities changed.</td><td>Linux assigns names dynamically.</td><td>Rediscover ports; do not infer board from ACM number.</td></tr></table>
+<h2>Safety trade-off</h2>
+<p>Explicit-message E-stop mode prevents false red-screen activation when the remote is unplugged, as requested for bench testing. It also means radio loss alone does not command a stop. A vehicle design must distinguish STOP, CLEAR, stale sequence, corrupted packets and lost communication, with an independent hardware stop path.</p>
+<h2>Why the stable BLDC file was restored</h2>
+<p>Commit <span class="mono">4abfe30</span> removed the partial LoRa merge from <span class="mono">full_bldc_test.py</span>. This preserved known-working traction behavior while retaining LoRa work in separate files.</p>
+<div class="box"><b>Diagnostic principle:</b> isolate one interface, verify identity or signal edges, then integrate. Serial access proves MCU communication only; it does not prove the radio, sensor, actuator or mechanical load.</div>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; VALIDATION STATUS</div>
+<h1>Current Validation Matrix</h1>
+<table class="grid"><tr><th>Subsystem</th><th>Evidence</th><th>Status</th><th>Next gate</th></tr>
+<tr><td>BLDC bench</td><td>Stable after pin correction; 5 V increased RPM.</td><td class="status-ok">Bench working</td><td>Resolve direction asymmetry; measure SV/RPM.</td></tr>
+<tr><td>NEMA23/TB6600 steering</td><td>Smooth jacked/low rate; stutters under load.</td><td class="status-fail">Loaded test failed</td><td>Measure torque, current, voltage and friction.</td></tr>
+<tr><td>NEMA34/R86mini</td><td>Code/math validated; no powered result recorded.</td><td class="status-open">Pending</td><td>Confirm interface/current/coils; unloaded 1 degree.</td></tr>
+<tr><td>Brake axis</td><td>Open-loop STEP/DIR/ENA logic.</td><td class="status-open">Pending load test</td><td>Add feedback and end stops.</td></tr>
+<tr><td>LoRa E-stop</td><td>Standalone packets and button transmission observed.</td><td class="status-open">Partial</td><td>Integrated STOP/CLEAR/link-loss test.</td></tr>
+<tr><td>RS485</td><td>PING/PONG observed; early corruption.</td><td class="status-open">Bench link</td><td>Framing, CRC, sequence, termination.</td></tr>
+<tr><td>MPU-9250/6500</td><td>Working I2C test committed.</td><td class="status-ok">Standalone working</td><td>Bias/orientation calibration and final pins.</td></tr>
+<tr><td>AS5600</td><td>I2C and isolated angle utilities.</td><td class="status-ok">Utility ready</td><td>Capture real zero/span under load.</td></tr>
+<tr><td>AS5047P</td><td>SPI test and PWM-enable helper; timeout diagnosed.</td><td class="status-open">Recheck PWM</td><td>Verify valid frame and magnet geometry.</td></tr></table>
+<h2>Recommended order of work</h2>
+<ol><li>Freeze a conflict-free ESP32-S3 pin map.</li><li>Complete unloaded NEMA34 tests at 1 degree, 5 degrees and center.</li><li>Measure loaded steering torque/current/voltage.</li><li>Measure BLDC SV and RPM in CW and CCW.</li><li>Validate encoder feedback, then close steering/brake loops.</li><li>Reintegrate LoRa into a copy of stable BLDC and test STOP, CLEAR, stale packets and link loss.</li><li>Add limit switches and an independent hardware E-stop before vehicle operation.</li></ol>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+<div class="page">
+<div class="header">AUTOKART RC &nbsp;|&nbsp; SOURCE TRACEABILITY</div>
+<h1>Source Files &amp; Git Traceability</h1>
+<h2>Principal source files</h2>
+<table class="grid compact"><tr><th>Area</th><th>Source</th></tr><tr><td>Traction bench</td><td class="mono">bench/full_bldc_test.py</td></tr><tr><td>LoRa traction/E-stop</td><td class="mono">bench/full_bldc_lora_estop_esp32s3.py</td></tr><tr><td>Pico transmitter</td><td class="mono">bench/pico2_ra02_estop_transmitter.py</td></tr><tr><td>NEMA34 steering</td><td class="mono">bench/nema34_test.py</td></tr><tr><td>Integrated actuators</td><td class="mono">firmware/autokart_rc_v5_controlled_stop.py</td></tr><tr><td>IMU</td><td class="mono">bench/imu_esp32s3_test.py</td></tr><tr><td>AS5600</td><td class="mono">bench/as5600_esp32s3_test.py; as5600_isolated_test.py; as5600_brake_feedback_test.py</td></tr><tr><td>AS5047P</td><td class="mono">bench/as5047p_esp32s3_test.py; as5047p_pwm_isolated_test.py; as5047p_enable_w_pwm_test.py</td></tr><tr><td>RS485</td><td class="mono">bench/rs485_c3_test.py; rs485_s3_test.py; docs/RS485_CONNECTIONS.md</td></tr></table>
+<h2>Key Git commits after 02 September</h2>
+<table class="grid compact"><tr><th>Commit</th><th>Date</th><th>Change</th></tr><tr><td class="mono">ed7b10f</td><td>05 Sep</td><td>Working IMU</td></tr><tr><td class="mono">989882d</td><td>05 Sep</td><td>Working encoders</td></tr><tr><td class="mono">58847c7</td><td>07 Sep</td><td>Pico 2 - RA02</td></tr><tr><td class="mono">feca57a</td><td>21 Sep</td><td>LoRa test</td></tr><tr><td class="mono">bb748ab</td><td>21 Sep</td><td>Transistor pin correction</td></tr><tr><td class="mono">41a757d</td><td>21 Sep</td><td>5 V and slider patch</td></tr><tr><td class="mono">9b48efb</td><td>21 Sep</td><td>LoRa E-stop</td></tr><tr><td class="mono">4abfe30</td><td>21 Sep</td><td>Default BLDC without LoRa</td></tr><tr><td class="mono">208b1fb</td><td>23 Sep</td><td>AS5600 feedback</td></tr><tr><td class="mono">11f188e</td><td>23 Sep</td><td>AS5047P PWM</td></tr><tr><td class="mono">36f4a94</td><td>28 Sep</td><td>NEMA34 test</td></tr></table>
+<div class="box"><b>Report basis:</b> repository history through commit <span class="mono">36f4a94</span>, plus dated bench observations supplied for 08, 21 and 22 September. Hardware observations are separated from static code validation.</div>
+<div class="footer">Engineering Development Report &nbsp;|&nbsp; Updated 28 September 2026</div>
+</div>
+
+</body>
+</html>
