@@ -3,8 +3,8 @@
 This program does not transmit LoRa packets and controls no actuator.
 
 Expected wiring:
-  RA-02 SCK   -> XIAO D8  / GPIO8
-  RA-02 MISO  -> XIAO D9  / GPIO9
+  RA-02 SCK   -> XIAO D5  / GPIO7
+  RA-02 MISO  -> XIAO D7  / GPIO20
   RA-02 MOSI  -> XIAO D10 / GPIO10
   RA-02 NSS   -> XIAO D3  / GPIO5
   RA-02 RESET -> XIAO D2  / GPIO4
@@ -21,8 +21,8 @@ from machine import Pin, SPI
 import time
 
 
-SPI_SCK = 8
-SPI_MISO = 9
+SPI_SCK = 7
+SPI_MISO = 20
 SPI_MOSI = 10
 RA02_CS = 5
 RA02_RESET = 4
@@ -73,7 +73,7 @@ print()
 print("========================================")
 print(" XIAO ESP32-C3 + RA-02 + LAY37 TEST")
 print("========================================")
-print("SPI: SCK=D8/GPIO8 MISO=D9/GPIO9 MOSI=D10/GPIO10")
+print("SPI: SCK=D5/GPIO7 MISO=D7/GPIO20 MOSI=D10/GPIO10")
 print("RA-02: CS=D3/GPIO5 RESET=D2/GPIO4 DIO0=D1/GPIO3")
 print("LAY37: NC=D4/GPIO6 COM=GND")
 
