@@ -1,7 +1,7 @@
 """ESP32-S3 + R86mini + NEMA34 open-loop steering test.
 
 The steering shaft is direct drive (1:1). At the configured 3200 pulses per
-motor revolution, 45 steering degrees equals 400 pulses.
+motor revolution, 90 steering degrees equals 800 pulses.
 
 IMPORTANT: This test has no encoder or limit switches. Mechanically center the
 steering before boot/reset; the program then treats that position as 0 degrees.
@@ -28,7 +28,7 @@ import time
 
 
 FIRMWARE_NAME = "r86mini-nema34-steering-test"
-FIRMWARE_VERSION = "2.0.0"
+FIRMWARE_VERSION = "2.1.0"
 
 STEP_GPIO = 4
 DIR_GPIO = 5
@@ -49,8 +49,8 @@ PULSES_PER_DEGREE = (
     PULSES_PER_REVOLUTION * STEERING_RATIO / 360.0
 )
 
-MIN_ANGLE_DEG = -45.0
-MAX_ANGLE_DEG = 40.0
+MIN_ANGLE_DEG = -90.0
+MAX_ANGLE_DEG = 90.0
 
 MIN_PPS = 100
 MAX_PPS = 2500
@@ -58,6 +58,9 @@ START_PPS = 200
 MAX_RAMP_STEPS = 160
 STEP_HIGH_US = 50
 DIR_SETTLE_MS = 100
+
+SWEEP_STEP_DEG = 2
+SWEEP_DELAY_MS = 1000
 
 pulse_rate_pps = 1200
 current_position_pulses = 0
@@ -160,11 +163,65 @@ def set_speed(requested_pps):
     print("STEERING SPEED:", pulse_rate_pps, "pulses/second")
 
 
-def set_zero_here():
-    """Assign software zero without moving the motor."""
+def calibrate_center_here():
+    """Assign the current physical steering position as software center."""
     global current_position_pulses
     current_position_pulses = 0
-    print("CURRENT PHYSICAL POSITION ASSIGNED AS 0 DEGREES")
+    print()
+    print("CENTER CALIBRATED")
+    print("Current physical steering position is now software 0 degrees.")
+    print("No motor movement was commanded.")
+    print()
+
+
+def sweep_targets(direction):
+    """Generate 2-degree targets and include the exact configured limit."""
+    angle = SWEEP_STEP_DEG
+
+    while angle < MAX_ANGLE_DEG:
+        yield direction * angle
+        angle += SWEEP_STEP_DEG
+
+    yield direction * MAX_ANGLE_DEG
+
+
+def continuous_steering_test():
+    """Continuously sweep center -> right limit -> center -> left limit."""
+    print()
+    print("CONTINUOUS STEERING TEST STARTED")
+    print("Each target changes by 2 degrees with a 1 second pause.")
+    print("Sequence: 0 -> +90 -> 0 -> -90 -> 0 -> repeat")
+    print("Press Ctrl+C to stop the sweep and return to the command prompt.")
+    print()
+
+    try:
+        move_to_angle(0)
+        time.sleep_ms(SWEEP_DELAY_MS)
+
+        while True:
+            for target in sweep_targets(1):
+                move_to_angle(target)
+                time.sleep_ms(SWEEP_DELAY_MS)
+
+            move_to_angle(0)
+            time.sleep_ms(SWEEP_DELAY_MS)
+
+            for target in sweep_targets(-1):
+                move_to_angle(target)
+                time.sleep_ms(SWEEP_DELAY_MS)
+
+            move_to_angle(0)
+            time.sleep_ms(SWEEP_DELAY_MS)
+
+    except KeyboardInterrupt:
+        STEP.value(INACTIVE)
+        print("\nCONTINUOUS SWEEP STOPPED")
+        print(
+            "Estimated position:",
+            round(pulses_to_degrees(current_position_pulses), 2),
+            "degrees",
+        )
+        print("Use 'center' to return to 0 degrees.")
 
 
 def status():
@@ -177,8 +234,8 @@ def status():
     print("Pulses/rev        :", PULSES_PER_REVOLUTION)
     print("Steering ratio    : 1:1")
     print("Pulses/degree     :", round(PULSES_PER_DEGREE, 4))
-    print("45 degree pulses  :", degrees_to_pulses(45))
-    print("Software limits   : -45 to +45 degrees")
+    print("90 degree pulses  :", degrees_to_pulses(90))
+    print("Software limits   : -90 to +90 degrees")
     print(
         "Estimated position:",
         round(pulses_to_degrees(current_position_pulses), 2),
@@ -194,12 +251,16 @@ def status():
 def help_text():
     print()
     print("Commands:")
-    print("  left       -> move to -45 degrees")
+    print("  left       -> move to -90 degrees")
+    print("  left 30    -> move to -30 degrees")
     print("  center     -> move to 0 degrees")
-    print("  right      -> move to +45 degrees")
-    print("  angle 20   -> move to any angle from -45 to +45")
+    print("  right      -> move to +90 degrees")
+    print("  right 30   -> move to +30 degrees")
+    print("  angle 20   -> move to any angle from -90 to +90")
+    print("  sweep      -> continuously test 0, +2...+90, 0, -2...-90")
     print("  speed 1200 -> set 100 to 2500 pulses/second")
-    print("  zero       -> assign current physical position as software 0")
+    print("  calibrate  -> assign current physical position as center / 0 degrees")
+    print("  zero       -> alias for calibrate")
     print("  status     -> show configuration and estimated position")
     print("  help       -> show commands")
     print("  q          -> quit")
@@ -213,9 +274,9 @@ print("========================================")
 print(" R86mini + NEMA34 1:1 STEERING TEST")
 print("========================================")
 print("CENTER THE STEERING PHYSICALLY BEFORE USING LEFT/RIGHT.")
-print("-45 deg =", degrees_to_pulses(-45), "pulses")
+print("-90 deg =", degrees_to_pulses(-90), "pulses")
 print("  0 deg = 0 pulses")
-print("+45 deg =", degrees_to_pulses(45), "pulses")
+print("+90 deg =", degrees_to_pulses(90), "pulses")
 help_text()
 
 try:
@@ -228,13 +289,29 @@ try:
         command = parts[0]
 
         if command == "left":
-            move_to_angle(-45)
+            try:
+                degrees = (
+                    abs(float(parts[1]))
+                    if len(parts) > 1
+                    else abs(MIN_ANGLE_DEG)
+                )
+                move_to_angle(-degrees)
+            except ValueError:
+                print("Example: left or left 30")
 
         elif command in ("center", "centre"):
             move_to_angle(0)
 
         elif command == "right":
-            move_to_angle(45)
+            try:
+                degrees = (
+                    abs(float(parts[1]))
+                    if len(parts) > 1
+                    else MAX_ANGLE_DEG
+                )
+                move_to_angle(degrees)
+            except ValueError:
+                print("Example: right or right 30")
 
         elif command == "angle":
             try:
@@ -242,14 +319,17 @@ try:
             except (ValueError, IndexError):
                 print("Example: angle 20 or angle -30")
 
+        elif command == "sweep":
+            continuous_steering_test()
+
         elif command == "speed":
             try:
                 set_speed(parts[1])
             except (ValueError, IndexError):
                 print("Example: speed 1200")
 
-        elif command == "zero":
-            set_zero_here()
+        elif command in ("calibrate", "zero"):
+            calibrate_center_here()
 
         elif command == "status":
             status()
@@ -262,8 +342,8 @@ try:
 
         else:
             print(
-                "Commands: left | center | right | angle deg | "
-                "speed pps | zero | status | help | q"
+                "Commands: left [deg] | center | right [deg] | angle deg | "
+                "sweep | speed pps | calibrate | status | help | q"
             )
 
 except KeyboardInterrupt:
