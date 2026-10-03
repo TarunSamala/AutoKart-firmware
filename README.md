@@ -110,6 +110,17 @@ It controls steering and brake through TB6600 step/dir drivers and throttle
 through the GP8630N/BLD750 interface. Steering and brake positioning remain
 open-loop and require mechanical calibration.
 
+The direct-drive NEMA34 + R86mini RC test controller is:
+
+```text
+firmware/New_AutoKartRC.py
+```
+
+It uses a 1:1 steering ratio with three commanded positions (`-45`, `0`,
+`+45` degrees), the GP8630N throttle output, and the BLD-750 BRK/EN/F-R
+transistor controls. Steering remains open-loop, so it must be mechanically
+centered before every boot or reset.
+
 ## Safety
 
 Bench-test only until actuator limits, RS485 integrity, throttle scaling,
