@@ -121,6 +121,16 @@ It uses a 1:1 steering ratio with three commanded positions (`-45`, `0`,
 transistor controls. Steering remains open-loop, so it must be mechanically
 centered before every boot or reset.
 
+For a standalone NEMA34 steering-only test over the ESP32-S3 Wi-Fi access
+point, flash this file as `main.py`:
+
+```text
+bench/R86MINI_nema34_wifi_steering_test.py
+```
+
+It provides left/right angle commands, center calibration, speed adjustment,
+continuous `-90` to `+90` degree sweeping, and stop/hold controls.
+
 ## Safety
 
 Bench-test only until actuator limits, RS485 integrity, throttle scaling,
