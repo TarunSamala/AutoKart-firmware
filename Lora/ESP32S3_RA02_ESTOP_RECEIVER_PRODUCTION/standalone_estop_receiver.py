@@ -6,12 +6,12 @@ required. This isolated receiver prints state only; it controls no actuator.
 Wiring:
   RA-02 VCC   -> ESP32-S3 3V3
   RA-02 GND   -> ESP32-S3 GND
-  RA-02 SCK   -> GPIO4
-  RA-02 MOSI  -> GPIO5
-  RA-02 MISO  -> GPIO6
-  RA-02 NSS   -> GPIO7
-  RA-02 RESET -> GPIO10
-  RA-02 DIO0  -> GPIO18
+  RA-02 SCK   -> GPIO12
+  RA-02 MOSI  -> GPIO11
+  RA-02 MISO  -> GPIO10
+  RA-02 NSS   -> GPIO9
+  RA-02 RESET -> GPIO8
+  RA-02 DIO0  -> GPIO17
 
 Accepted packets:
   ESTOP,0,sequence = released / clear
@@ -24,12 +24,12 @@ from machine import Pin, SPI
 import time
 
 
-SPI_SCK = 4
-SPI_MOSI = 5
-SPI_MISO = 6
-RA02_CS = 7
-RA02_RESET = 10
-RA02_DIO0 = 18
+SPI_SCK = 12
+SPI_MOSI = 11
+SPI_MISO = 10
+RA02_CS = 9
+RA02_RESET = 8
+RA02_DIO0 = 17
 FREQUENCY_HZ = 433_000_000
 
 
@@ -204,7 +204,7 @@ print()
 print("========================================")
 print(" ESP32-S3 LORA E-STOP RECEIVER MONITOR")
 print("========================================")
-print("RA-02: SCK4 MOSI5 MISO6 CS7 RESET10 DIO0=18")
+print("RA-02: SCK12 MOSI11 MISO10 CS9 RESET8 DIO0=17")
 
 radio.begin()
 

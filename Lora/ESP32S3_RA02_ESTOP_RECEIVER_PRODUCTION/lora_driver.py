@@ -12,13 +12,13 @@ class LoRa:
             baudrate=8000000,
             polarity=0,
             phase=0,
-            sck=Pin(4),
-            mosi=Pin(5),
-            miso=Pin(6)
+            sck=Pin(12),
+            mosi=Pin(11),
+            miso=Pin(10)
         )
 
-        self.cs = Pin(7, Pin.OUT, value=1)
-        self.reset_pin = Pin(10, Pin.OUT)
+        self.cs = Pin(9, Pin.OUT, value=1)
+        self.reset_pin = Pin(8, Pin.OUT)
 
 
     def begin(self):

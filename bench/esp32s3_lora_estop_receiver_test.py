@@ -16,13 +16,13 @@ import time
 from ra02_lora_chat_common import SX1278
 
 
-# Alternate ESP32-S3 pins: BLDC GPIO13/14/15 remain untouched.
-SPI_SCK = 4
-SPI_MOSI = 5
-SPI_MISO = 6
-RA02_CS = 7
-RA02_RESET = 10
-RA02_DIO0 = 18
+# Terminal-adapter pins: BLDC GPIO13/14/15 remain untouched.
+SPI_SCK = 12
+SPI_MOSI = 11
+SPI_MISO = 10
+RA02_CS = 9
+RA02_RESET = 8
+RA02_DIO0 = 17
 FREQUENCY_HZ = 433_000_000
 
 
@@ -72,7 +72,7 @@ last_sequence = None
 
 print()
 print("ESP32-S3 LORA E-STOP RECEIVER TEST READY")
-print("RA-02: SCK4 MOSI5 MISO6 CS7 RESET10 DIO0=18")
+print("RA-02: SCK12 MOSI11 MISO10 CS9 RESET8 DIO0=17")
 print("Waiting for the XIAO ESP32-C3 transmitter...")
 print("Startup state: UNKNOWN; no actuator outputs are controlled.")
 
