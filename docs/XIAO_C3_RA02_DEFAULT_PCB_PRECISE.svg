@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100">
+  <style>
+    .bg{fill:#f4f6f8}.board{fill:#165b45;stroke:#092d23;stroke-width:8}.module{fill:#20252a;stroke:#101418;stroke-width:4}.pad{fill:#d9ad4e;stroke:#503a0e;stroke-width:2}.c3pad{fill:#4caf50;stroke:#17451b;stroke-width:2}.txt{font:20px Arial,sans-serif;fill:#172027}.white{font:20px Arial,sans-serif;fill:white}.small{font:16px Arial,sans-serif;fill:#e5f1eb}.title{font:bold 31px Arial,sans-serif;fill:white}.head{font:bold 22px Arial,sans-serif;fill:#0d2933}.net{fill:none;stroke-width:5;stroke-linecap:round;opacity:.86}.gnd{stroke:#707b83}.pwr{stroke:#ef4444}.ctrl{stroke:#2196f3}.spi{stroke:#f5c242}.estop{stroke:#e83e8c}.unused{fill:#b8c0c5;font:16px Arial,sans-serif}.warn{fill:#fff3cd;stroke:#d39e00;stroke-width:2}.legend{font:16px Arial,sans-serif;fill:#172027}
+  </style>
+  <rect width="1600" height="1100" class="bg"/>
+  <rect x="30" y="30" width="1540" height="1040" rx="28" class="board"/>
+  <text x="800" y="75" text-anchor="middle" class="title">XIAO ESP32-C3 + RA-02 E-STOP PCB — PRECISE DEFAULT PINOUT</text>
+  <text x="800" y="105" text-anchor="middle" class="small">Top view • official XIAO C3 GPIO mapping • frozen firmware assignment</text>
+
+  <!-- RA-02 carrier -->
+  <rect x="560" y="145" width="480" height="410" rx="16" class="module"/>
+  <text x="800" y="330" text-anchor="middle" class="title">RA-02 / SX1278</text>
+  <text x="800" y="365" text-anchor="middle" class="small">433 MHz LoRa module</text>
+  <text x="800" y="398" text-anchor="middle" class="small">Antenna connector at upper-left</text>
+
+  <!-- RA02 left header, actual board order -->
+  <text x="475" y="135" text-anchor="end" class="head">RA-02 LEFT</text>
+  <g>
+    <rect x="505" y="160" width="38" height="30" class="pad"/><text x="485" y="182" text-anchor="end" class="white">GND</text>
+    <rect x="505" y="205" width="38" height="30" class="pad"/><text x="485" y="227" text-anchor="end" class="white">GND</text>
+    <rect x="505" y="250" width="38" height="30" class="pad"/><text x="485" y="272" text-anchor="end" class="white">3.3V</text>
+    <rect x="505" y="295" width="38" height="30" class="pad"/><text x="485" y="317" text-anchor="end" class="white">RST</text>
+    <rect x="505" y="340" width="38" height="30" class="pad"/><text x="485" y="362" text-anchor="end" class="white">DIO0</text>
+    <rect x="505" y="385" width="38" height="30" class="pad"/><text x="485" y="407" text-anchor="end" class="white">DIO1</text>
+    <rect x="505" y="430" width="38" height="30" class="pad"/><text x="485" y="452" text-anchor="end" class="white">DIO2</text>
+    <rect x="505" y="475" width="38" height="30" class="pad"/><text x="485" y="497" text-anchor="end" class="white">DIO3</text>
+  </g>
+
+  <!-- RA02 right header, actual board order -->
+  <text x="1125" y="135" class="head">RA-02 RIGHT</text>
+  <g>
+    <rect x="1057" y="160" width="38" height="30" class="pad"/><text x="1115" y="182" class="white">GND</text>
+    <rect x="1057" y="205" width="38" height="30" class="pad"/><text x="1115" y="227" class="white">NSS</text>
+    <rect x="1057" y="250" width="38" height="30" class="pad"/><text x="1115" y="272" class="white">MOSI</text>
+    <rect x="1057" y="295" width="38" height="30" class="pad"/><text x="1115" y="317" class="white">MISO</text>
+    <rect x="1057" y="340" width="38" height="30" class="pad"/><text x="1115" y="362" class="white">SCK</text>
+    <rect x="1057" y="385" width="38" height="30" class="pad"/><text x="1115" y="407" class="white">DIO5</text>
+    <rect x="1057" y="430" width="38" height="30" class="pad"/><text x="1115" y="452" class="white">DIO4</text>
+    <rect x="1057" y="475" width="38" height="30" class="pad"/><text x="1115" y="497" class="white">GND</text>
+  </g>
+
+  <!-- C3 carrier -->
+  <rect x="560" y="665" width="480" height="260" rx="16" class="module"/>
+  <text x="800" y="790" text-anchor="middle" class="title">XIAO ESP32-C3</text>
+  <text x="800" y="823" text-anchor="middle" class="small">USB-C toward lower edge</text>
+  <text x="800" y="852" text-anchor="middle" class="small">3V3 and GND power pins included</text>
+
+  <!-- Official C3 left order -->
+  <text x="475" y="640" text-anchor="end" class="head">C3 LEFT</text>
+  <g>
+    <rect x="505" y="680" width="38" height="25" class="c3pad"/><text x="485" y="700" text-anchor="end" class="white">D0 / GPIO2</text>
+    <rect x="505" y="715" width="38" height="25" class="c3pad"/><text x="485" y="735" text-anchor="end" class="white">D1</text>
+    <rect x="505" y="750" width="38" height="25" class="c3pad"/><text x="485" y="770" text-anchor="end" class="white">D2</text>
+    <rect x="505" y="785" width="38" height="25" class="c3pad"/><text x="485" y="805" text-anchor="end" class="white">D3</text>
+    <rect x="505" y="820" width="38" height="25" class="c3pad"/><text x="485" y="840" text-anchor="end" class="white">D4</text>
+    <rect x="505" y="855" width="38" height="25" class="c3pad"/><text x="485" y="875" text-anchor="end" class="white">D5</text>
+    <rect x="505" y="890" width="38" height="25" class="c3pad"/><text x="485" y="910" text-anchor="end" class="white">D6</text>
+  </g>
+
+  <!-- Official C3 right order -->
+  <text x="1125" y="640" class="head">C3 RIGHT</text>
+  <g>
+    <rect x="1057" y="680" width="38" height="25" class="c3pad"/><text x="1115" y="700" class="white">VBUS / 5V</text>
+    <rect x="1057" y="715" width="38" height="25" class="c3pad"/><text x="1115" y="735" class="white">GND</text>
+    <rect x="1057" y="750" width="38" height="25" class="c3pad"/><text x="1115" y="770" class="white">3V3</text>
+    <rect x="1057" y="785" width="38" height="25" class="c3pad"/><text x="1115" y="805" class="white">D10</text>
+    <rect x="1057" y="820" width="38" height="25" class="c3pad"/><text x="1115" y="840" class="white">D9</text>
+    <rect x="1057" y="855" width="38" height="25" class="c3pad"/><text x="1115" y="875" class="white">D8</text>
+    <rect x="1057" y="890" width="38" height="25" class="c3pad"/><text x="1115" y="910" class="white">D7</text>
+  </g>
+
+  <!-- net lines, deliberately conceptual and color coded -->
+  <path d="M524 175 C400 175 370 600 1076 867" class="net gnd"/><path d="M524 220 C390 220 360 600 1076 867" class="net gnd"/>
+  <path d="M524 265 C430 265 430 560 1076 762" class="net pwr"/>
+  <path d="M524 310 C350 330 390 600 524 762" class="net ctrl"/>
+  <path d="M524 355 C320 370 360 600 524 727" class="net ctrl"/>
+  <path d="M1076 175 C1210 180 1200 600 1076 727" class="net gnd"/>
+  <path d="M1076 220 C1250 250 1260 600 524 797" class="net spi"/>
+  <path d="M1076 265 C1280 285 1300 600 1076 797" class="net spi"/>
+  <path d="M1076 310 C1300 330 1330 600 1076 902" class="net spi"/>
+  <path d="M1076 355 C1350 380 1370 600 524 867" class="net spi"/>
+
+  <!-- unused notes -->
+  <text x="220" y="455" class="unused">DIO1/DIO2/DIO3: NC</text>
+  <text x="1210" y="455" class="unused">DIO4/DIO5: NC</text>
+
+  <!-- LAY37 -->
+  <rect x="1190" y="930" width="300" height="95" rx="10" class="warn"/>
+  <text x="1210" y="960" class="head">LAY37 E-STOP</text>
+  <text x="1210" y="988" class="legend">NC → D4 / GPIO6</text>
+  <text x="1210" y="1012" class="legend">COM → GND</text>
+  <path d="M524 832 C800 1010 1000 1000 1210 988" class="net estop"/>
+
+  <rect x="80" y="955" width="1030" height="70" rx="10" class="warn"/>
+  <text x="100" y="985" class="head">DEFAULT FROZEN MAPPING</text>
+  <text x="100" y="1012" class="legend">RST→D2 • DIO0→D1 • NSS→D3 • MOSI→D10 • MISO→D7 • SCK→D5</text>
+</svg>

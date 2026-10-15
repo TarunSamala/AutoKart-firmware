@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1000" viewBox="0 0 1500 1000">
+<style>
+.board{fill:#064b3b;stroke:#062b21;stroke-width:10}.mod{fill:#20282d;stroke:#e4eee7;stroke-width:3}.pad{fill:#d7a940;stroke:#33250a;stroke-width:2}.h{fill:#fff;font:bold 30px Arial}.t{fill:#f0f8f1;font:18px Arial}.s{fill:#b7d3c0;font:15px Arial}.tr{fill:none;stroke-width:7;stroke-linecap:square;stroke-linejoin:miter}.g{stroke:#a5b0b5}.p{stroke:#ff4b4b;stroke-dasharray:14 8}.rst{stroke:#49a9ff}.dio{stroke:#cf83ff}.nss{stroke:#ff9d19}.mosi{stroke:#38d878}.miso{stroke:#13c9dc}.sck{stroke:#ffe04b}.estop{stroke:#ff66b4}.note{fill:#372e12;stroke:#e6b94c;stroke-width:2}.tag{fill:#0a241b;stroke:#87bea0;stroke-width:2}.via{fill:white;stroke:#111;stroke-width:3}
+</style>
+<rect width="1500" height="1000" fill="#0c1518"/>
+<rect x="25" y="25" width="1450" height="950" rx="28" class="board"/>
+<text x="750" y="67" text-anchor="middle" class="h">COMPACT RA-02 + XIAO ESP32-C3 PCB</text>
+<text x="750" y="96" text-anchor="middle" class="s">RA-02 TOP • XIAO C3 BOTTOM • female sockets • straight fan-out routing</text>
+
+<!-- component footprints -->
+<rect x="585" y="145" width="330" height="170" rx="14" class="mod"/>
+<text x="750" y="225" text-anchor="middle" class="h">RA-02</text>
+<text x="750" y="255" text-anchor="middle" class="s">male pins plug into female PCB sockets</text>
+<rect x="585" y="640" width="330" height="190" rx="14" class="mod"/>
+<text x="750" y="730" text-anchor="middle" class="h">XIAO C3</text>
+<text x="750" y="760" text-anchor="middle" class="s">male pins plug into female PCB sockets</text>
+<text x="750" y="787" text-anchor="middle" class="s">USB-C toward bottom edge</text>
+
+<!-- RA02 sockets -->
+<g>
+<circle cx="500" cy="160" r="11" class="pad"/><text x="470" y="167" text-anchor="end" class="t">GND</text>
+<circle cx="500" cy="195" r="11" class="pad"/><text x="470" y="202" text-anchor="end" class="t">GND</text>
+<circle cx="500" cy="230" r="11" class="pad"/><text x="470" y="237" text-anchor="end" class="t">3.3V</text>
+<circle cx="500" cy="265" r="11" class="pad"/><text x="470" y="272" text-anchor="end" class="t">RST</text>
+<circle cx="500" cy="300" r="11" class="pad"/><text x="470" y="307" text-anchor="end" class="t">DIO0</text>
+<circle cx="1000" cy="160" r="11" class="pad"/><text x="1030" y="167" class="t">GND</text>
+<circle cx="1000" cy="195" r="11" class="pad"/><text x="1030" y="202" class="t">NSS</text>
+<circle cx="1000" cy="230" r="11" class="pad"/><text x="1030" y="237" class="t">MOSI</text>
+<circle cx="1000" cy="265" r="11" class="pad"/><text x="1030" y="272" class="t">MISO</text>
+<circle cx="1000" cy="300" r="11" class="pad"/><text x="1030" y="307" class="t">SCK</text>
+</g>
+
+<!-- C3 sockets, official physical order -->
+<g>
+<circle cx="500" cy="665" r="11" class="pad"/><text x="470" y="672" text-anchor="end" class="t">D0</text>
+<circle cx="500" cy="700" r="11" class="pad"/><text x="470" y="707" text-anchor="end" class="t">D1</text>
+<circle cx="500" cy="735" r="11" class="pad"/><text x="470" y="742" text-anchor="end" class="t">D2</text>
+<circle cx="500" cy="770" r="11" class="pad"/><text x="470" y="777" text-anchor="end" class="t">D3</text>
+<circle cx="500" cy="805" r="11" class="pad"/><text x="470" y="812" text-anchor="end" class="t">D4</text>
+<circle cx="500" cy="840" r="11" class="pad"/><text x="470" y="847" text-anchor="end" class="t">D5</text>
+<circle cx="1000" cy="665" r="11" class="pad"/><text x="1030" y="672" class="t">VBUS</text>
+<circle cx="1000" cy="700" r="11" class="pad"/><text x="1030" y="707" class="t">GND</text>
+<circle cx="1000" cy="735" r="11" class="pad"/><text x="1030" y="742" class="t">3V3</text>
+<circle cx="1000" cy="770" r="11" class="pad"/><text x="1030" y="777" class="t">D10</text>
+<circle cx="1000" cy="805" r="11" class="pad"/><text x="1030" y="812" class="t">D9</text>
+<circle cx="1000" cy="840" r="11" class="pad"/><text x="1030" y="847" class="t">D8</text>
+<circle cx="1000" cy="875" r="11" class="pad"/><text x="1030" y="882" class="t">D7</text>
+</g>
+
+<!-- top copper: power and ground only -->
+<path d="M500 160 H350 V920 H1150 V700 H1000" class="tr g"/>
+<path d="M500 195 H380 V920" class="tr g"/>
+<path d="M1000 160 H1150 V700" class="tr g"/>
+<path d="M500 230 H300 V930 H1200 V735 H1000" class="tr p"/>
+
+<!-- bottom copper: compact straight signal fan-out -->
+<!-- RST -> D2 and DIO0 -> D1 use separate left lanes -->
+<path d="M500 265 H240 V500 H450 V735 H500" class="tr rst"/>
+<path d="M500 300 H200 V535 H420 V700 H500" class="tr dio"/>
+<!-- NSS -> D3 uses outer right lane then bottom-left fan-out -->
+<path d="M1000 195 H1300 V570 H1120 V610 H350 V770 H500" class="tr nss"/>
+<!-- MOSI -> D10 and MISO -> D7 stay on right -->
+<path d="M1000 230 H1080 V770 H1000" class="tr mosi"/>
+<path d="M1000 265 H1115 V875 H1000" class="tr miso"/>
+<!-- SCK -> D5 uses the far-right and lowest corridor -->
+<path d="M1000 300 H1380 V600 H1250 V920 H430 V840 H500" class="tr sck"/>
+<!-- LAY37 D4 -->
+<path d="M500 805 H280 V950 H140" class="tr estop"/>
+<circle cx="120" cy="950" r="11" class="pad"/><text x="150" y="957" class="t">LAY37 NC</text>
+<path d="M120 915 H350 V920" class="tr g"/>
+<circle cx="120" cy="915" r="11" class="pad"/><text x="150" y="922" class="t">LAY37 COM → GND</text>
+
+<!-- legend and engineering note -->
+<rect x="590" y="900" width="790" height="64" rx="9" class="tag"/>
+<text x="610" y="927" class="t">Top copper: GND + 3V3</text>
+<text x="610" y="951" class="s">Bottom copper: RST, DIO0, NSS, MOSI, MISO, SCK, LAY37</text>
+<rect x="80" y="925" width="440" height="39" rx="8" class="note"/>
+<text x="100" y="950" class="s">Default firmware unchanged • no signal trace crosses another signal layer</text>
+</svg>
