@@ -6,8 +6,8 @@ BLDC outputs:
   GPIO15 -> F/R transistor
 
 RA-02 alternate pins, avoiding BLDC GPIO13/14/15:
-  GPIO4=SCK, GPIO5=MOSI, GPIO6=MISO, GPIO7=CS
-  GPIO10=RESET, GPIO18=DIO0
+  GPIO12=SCK, GPIO11=MOSI, GPIO10=MISO, GPIO9=CS
+  GPIO8=RESET, GPIO17=DIO0
 
 The controller starts safe. It will not permit traction unless a valid
 ESTOP,0 heartbeat has arrived recently from the Pico 2.
@@ -45,14 +45,14 @@ radio_spi = SPI(
     baudrate=2000000,
     polarity=0,
     phase=0,
-    sck=Pin(4),
-    mosi=Pin(5),
-    miso=Pin(6),
+    sck=Pin(12),
+    mosi=Pin(11),
+    miso=Pin(10),
 )
 radio = SX1278(
     radio_spi,
-    Pin(7, Pin.OUT, value=1),
-    Pin(10, Pin.OUT, value=1),
+    Pin(9, Pin.OUT, value=1),
+    Pin(8, Pin.OUT, value=1),
     433000000,
 )
 
@@ -235,7 +235,7 @@ server.settimeout(0.02)
 print("BLDC + LORA E-STOP READY")
 print("IP:", ap.ifconfig()[0])
 print("REMOTE ESTOP REQUIRED BEFORE RUN")
-print("RA-02 SPI: SCK4 MOSI5 MISO6 CS7 RST10 DIO18")
+print("RA-02 SPI: SCK12 MOSI11 MISO10 CS9 RST8 DIO17")
 print("BLDC: BRK13 EN14 F/R15")
 
 try:

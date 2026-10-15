@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100">
+  <style>
+    .pcb{fill:#123d32;stroke:#071d18;stroke-width:10}.silk{fill:none;stroke:#d5e9dc;stroke-width:3}.module{fill:#1d252a;stroke:#d5e9dc;stroke-width:3}.socket{fill:#d6a83f;stroke:#2d2108;stroke-width:2}.txt{fill:#ecf7ef;font:20px Arial,sans-serif}.small{fill:#b7d3c2;font:16px Arial,sans-serif}.title{fill:white;font:bold 31px Arial,sans-serif}.trace{fill:none;stroke-width:7;stroke-linecap:square;stroke-linejoin:miter}.gnd{stroke:#8f9ba2}.pwr{stroke:#ff4b4b}.rst{stroke:#48a9ff}.dio{stroke:#d18aff}.nss{stroke:#ff9f1c}.mosi{stroke:#39d353}.miso{stroke:#16c7d9}.sck{stroke:#ffe14a}.estop{stroke:#ff65b5}.tag{fill:#0b241d;stroke:#91c5a5;stroke-width:2}.legend{font:17px Arial,sans-serif;fill:#eaf5ed}.unused{fill:#82978a;font:15px Arial,sans-serif}.warning{fill:#3b2d11;stroke:#e6b84c;stroke-width:2}
+  </style>
+  <rect width="1600" height="1100" fill="#0c1518"/>
+  <rect x="25" y="25" width="1550" height="1050" rx="25" class="pcb"/>
+  <text x="800" y="70" text-anchor="middle" class="title">RA-02 + XIAO ESP32-C3 — STRAIGHT UNDERSIDE TRACE MAP</text>
+  <text x="800" y="101" text-anchor="middle" class="small">Female sockets are through-hole • traces are on the underside • no curved routes</text>
+
+  <!-- top module placement -->
+  <rect x="570" y="135" width="460" height="220" rx="12" class="module"/>
+  <text x="800" y="235" text-anchor="middle" class="title">RA-02</text>
+  <text x="800" y="270" text-anchor="middle" class="small">TOP MODULE • MALE PINS PLUG DOWN</text>
+  <text x="800" y="302" text-anchor="middle" class="small">female sockets fixed in PCB</text>
+
+  <!-- RA02 pads, left -->
+  <text x="420" y="120" text-anchor="end" class="txt">RA-02 LEFT</text>
+  <g>
+    <circle cx="500" cy="155" r="13" class="socket"/><text x="470" y="162" text-anchor="end" class="txt">GND</text>
+    <circle cx="500" cy="190" r="13" class="socket"/><text x="470" y="197" text-anchor="end" class="txt">GND</text>
+    <circle cx="500" cy="225" r="13" class="socket"/><text x="470" y="232" text-anchor="end" class="txt">3.3V</text>
+    <circle cx="500" cy="260" r="13" class="socket"/><text x="470" y="267" text-anchor="end" class="txt">RST</text>
+    <circle cx="500" cy="295" r="13" class="socket"/><text x="470" y="302" text-anchor="end" class="txt">DIO0</text>
+    <circle cx="500" cy="330" r="13" class="socket"/><text x="470" y="337" text-anchor="end" class="unused">DIO1 NC</text>
+  </g>
+  <!-- RA02 pads, right -->
+  <text x="1180" y="120" class="txt">RA-02 RIGHT</text>
+  <g>
+    <circle cx="1100" cy="155" r="13" class="socket"/><text x="1130" y="162" class="txt">GND</text>
+    <circle cx="1100" cy="190" r="13" class="socket"/><text x="1130" y="197" class="txt">NSS</text>
+    <circle cx="1100" cy="225" r="13" class="socket"/><text x="1130" y="232" class="txt">MOSI</text>
+    <circle cx="1100" cy="260" r="13" class="socket"/><text x="1130" y="267" class="txt">MISO</text>
+    <circle cx="1100" cy="295" r="13" class="socket"/><text x="1130" y="302" class="txt">SCK</text>
+    <circle cx="1100" cy="330" r="13" class="socket"/><text x="1130" y="337" class="unused">DIO5 NC</text>
+  </g>
+
+  <!-- bottom module placement -->
+  <rect x="570" y="720" width="460" height="220" rx="12" class="module"/>
+  <text x="800" y="820" text-anchor="middle" class="title">XIAO ESP32-C3</text>
+  <text x="800" y="855" text-anchor="middle" class="small">BOTTOM MODULE • MALE PINS PLUG UP</text>
+  <text x="800" y="887" text-anchor="middle" class="small">USB-C toward lower edge</text>
+
+  <!-- C3 pads, official left order -->
+  <text x="420" y="690" text-anchor="end" class="txt">C3 LEFT</text>
+  <g>
+    <circle cx="500" cy="735" r="13" class="socket"/><text x="470" y="742" text-anchor="end" class="txt">D0</text>
+    <circle cx="500" cy="770" r="13" class="socket"/><text x="470" y="777" text-anchor="end" class="txt">D1</text>
+    <circle cx="500" cy="805" r="13" class="socket"/><text x="470" y="812" text-anchor="end" class="txt">D2</text>
+    <circle cx="500" cy="840" r="13" class="socket"/><text x="470" y="847" text-anchor="end" class="txt">D3</text>
+    <circle cx="500" cy="875" r="13" class="socket"/><text x="470" y="882" text-anchor="end" class="txt">D4</text>
+    <circle cx="500" cy="910" r="13" class="socket"/><text x="470" y="917" text-anchor="end" class="txt">D5</text>
+    <circle cx="500" cy="945" r="13" class="socket"/><text x="470" y="952" text-anchor="end" class="txt">D6</text>
+  </g>
+  <!-- C3 pads, official right order -->
+  <text x="1180" y="690" class="txt">C3 RIGHT</text>
+  <g>
+    <circle cx="1100" cy="735" r="13" class="socket"/><text x="1130" y="742" class="txt">VBUS / 5V</text>
+    <circle cx="1100" cy="770" r="13" class="socket"/><text x="1130" y="777" class="txt">GND</text>
+    <circle cx="1100" cy="805" r="13" class="socket"/><text x="1130" y="812" class="txt">3V3</text>
+    <circle cx="1100" cy="840" r="13" class="socket"/><text x="1130" y="847" class="txt">D10</text>
+    <circle cx="1100" cy="875" r="13" class="socket"/><text x="1130" y="882" class="txt">D9</text>
+    <circle cx="1100" cy="910" r="13" class="socket"/><text x="1130" y="917" class="txt">D8</text>
+    <circle cx="1100" cy="945" r="13" class="socket"/><text x="1130" y="952" class="txt">D7</text>
+  </g>
+
+  <!-- straight underside traces: all segments are horizontal/vertical/45-degree -->
+  <!-- GND traces and rails -->
+  <path d="M500 155 H300 V1050 H1260 V770 H1100" class="trace gnd"/>
+  <path d="M500 190 H340 V1020 H1260" class="trace gnd"/>
+  <path d="M1100 155 H1260 V770" class="trace gnd"/>
+  <!-- 3V3 -->
+  <path d="M500 225 H380 V1050 H1100 V805" class="trace pwr"/>
+  <!-- RST to D2; DIO0 to D1, separate straight lanes -->
+  <path d="M500 260 H260 V620 H430 V805 H500" class="trace rst"/>
+  <path d="M500 295 H220 V650 H400 V770 H500" class="trace dio"/>
+  <!-- NSS to D3 -->
+  <path d="M1100 190 H1360 V560 H1180 V680 H700 V840 H500" class="trace nss"/>
+  <!-- MOSI to D10 -->
+  <path d="M1100 225 H1320 V590 H1240 V680 H1100 V840" class="trace mosi"/>
+  <!-- MISO to D7 -->
+  <path d="M1100 260 H1280 V625 H1200 V700 H1150 V945 H1100" class="trace miso"/>
+  <!-- SCK to D5 -->
+  <path d="M1100 295 H1400 V675 H900 V1020 H500 V910" class="trace sck"/>
+  <!-- LAY37 branch from D4 -->
+  <path d="M500 875 H350 V1060 H190" class="trace estop"/>
+  <circle cx="150" cy="1060" r="13" class="socket"/><text x="180" y="1067" class="txt">LAY37 NC</text>
+  <circle cx="150" cy="1020" r="13" class="socket"/><text x="180" y="1027" class="txt">LAY37 COM → GND</text>
+  <path d="M150 1020 H340 V1020" class="trace gnd"/>
+
+  <rect x="650" y="1010" width="700" height="110" rx="10" class="tag"/>
+  <text x="675" y="1042" class="txt">UNDERSIDE TRACE RULE</text>
+  <text x="675" y="1070" class="legend">Straight orthogonal routing shown. No curved traces.</text>
+  <text x="675" y="1096" class="legend">Check intersections in the CAD tool before fabrication.</text>
+</svg>

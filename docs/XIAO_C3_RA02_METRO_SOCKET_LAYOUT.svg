@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1200" viewBox="0 0 1500 1200">
+  <style>
+    .bg{fill:#101820}.panel{fill:#18352d;stroke:#6da98b;stroke-width:4}.module{fill:#252b31;stroke:#d5dde2;stroke-width:3}.socket{fill:#333b42;stroke:#a9b5bb;stroke-width:2}.pin{fill:#d7a94a;stroke:#2b2110;stroke-width:2}.txt{font:20px Arial,sans-serif;fill:#edf5f1}.small{font:16px Arial,sans-serif;fill:#bcd4c7}.title{font:bold 31px Arial,sans-serif;fill:#fff}.net{fill:none;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}.gnd{stroke:#9aa5ad}.pwr{stroke:#ff4d4d}.rst{stroke:#51a7ff}.dio{stroke:#c084fc}.nss{stroke:#f59e0b}.mosi{stroke:#22c55e}.miso{stroke:#06b6d4}.sck{stroke:#facc15}.estop{stroke:#f472b6}.legend{font:17px Arial,sans-serif;fill:#e9f4ed}.unused{fill:#89969d;font:15px Arial,sans-serif}.note{fill:#322b16;stroke:#e0b341;stroke-width:2}
+  </style>
+  <rect width="1500" height="1200" class="bg"/>
+  <rect x="25" y="25" width="1450" height="1150" rx="30" class="panel"/>
+  <text x="750" y="70" text-anchor="middle" class="title">RA-02 + XIAO ESP32-C3 — REMOVABLE SOCKET PCB</text>
+  <text x="750" y="100" text-anchor="middle" class="small">Metro-line connection diagram • RA-02 TOP • XIAO C3 BOTTOM • top view</text>
+
+  <!-- RA02 top module and sockets -->
+  <rect x="540" y="150" width="420" height="220" rx="15" class="module"/>
+  <text x="750" y="245" text-anchor="middle" class="title">RA-02 MODULE</text>
+  <text x="750" y="278" text-anchor="middle" class="small">male pins plug into PCB female sockets</text>
+  <text x="750" y="310" text-anchor="middle" class="small">433 MHz antenna toward upper edge</text>
+
+  <text x="420" y="133" text-anchor="end" class="txt">PCB FEMALE SOCKET — LEFT</text>
+  <text x="1080" y="133" class="txt">PCB FEMALE SOCKET — RIGHT</text>
+
+  <!-- RA02 left socket order -->
+  <g>
+    <rect x="470" y="155" width="42" height="25" class="socket"/><text x="455" y="175" text-anchor="end" class="txt">GND</text>
+    <rect x="470" y="190" width="42" height="25" class="socket"/><text x="455" y="210" text-anchor="end" class="txt">GND</text>
+    <rect x="470" y="225" width="42" height="25" class="socket"/><text x="455" y="245" text-anchor="end" class="txt">3.3V</text>
+    <rect x="470" y="260" width="42" height="25" class="socket"/><text x="455" y="280" text-anchor="end" class="txt">RST</text>
+    <rect x="470" y="295" width="42" height="25" class="socket"/><text x="455" y="315" text-anchor="end" class="txt">DIO0</text>
+    <rect x="470" y="330" width="42" height="25" class="socket"/><text x="455" y="350" text-anchor="end" class="unused">DIO1 NC</text>
+  </g>
+  <!-- RA02 right socket order -->
+  <g>
+    <rect x="988" y="155" width="42" height="25" class="socket"/><text x="1050" y="175" class="txt">GND</text>
+    <rect x="988" y="190" width="42" height="25" class="socket"/><text x="1050" y="210" class="txt">NSS</text>
+    <rect x="988" y="225" width="42" height="25" class="socket"/><text x="1050" y="245" class="txt">MOSI</text>
+    <rect x="988" y="260" width="42" height="25" class="socket"/><text x="1050" y="280" class="txt">MISO</text>
+    <rect x="988" y="295" width="42" height="25" class="socket"/><text x="1050" y="315" class="txt">SCK</text>
+    <rect x="988" y="330" width="42" height="25" class="socket"/><text x="1050" y="350" class="unused">DIO5 NC</text>
+  </g>
+
+  <!-- C3 bottom module and sockets -->
+  <rect x="540" y="800" width="420" height="240" rx="15" class="module"/>
+  <text x="750" y="900" text-anchor="middle" class="title">XIAO ESP32-C3</text>
+  <text x="750" y="933" text-anchor="middle" class="small">male pins plug into PCB female sockets</text>
+  <text x="750" y="965" text-anchor="middle" class="small">USB-C toward lower edge</text>
+
+  <text x="420" y="755" text-anchor="end" class="txt">PCB FEMALE SOCKET — LEFT</text>
+  <text x="1080" y="755" class="txt">PCB FEMALE SOCKET — RIGHT</text>
+
+  <!-- C3 left official order -->
+  <g>
+    <rect x="470" y="790" width="42" height="25" class="socket"/><text x="455" y="810" text-anchor="end" class="txt">D0</text>
+    <rect x="470" y="825" width="42" height="25" class="socket"/><text x="455" y="845" text-anchor="end" class="txt">D1</text>
+    <rect x="470" y="860" width="42" height="25" class="socket"/><text x="455" y="880" text-anchor="end" class="txt">D2</text>
+    <rect x="470" y="895" width="42" height="25" class="socket"/><text x="455" y="915" text-anchor="end" class="txt">D3</text>
+    <rect x="470" y="930" width="42" height="25" class="socket"/><text x="455" y="950" text-anchor="end" class="txt">D4</text>
+    <rect x="470" y="965" width="42" height="25" class="socket"/><text x="455" y="985" text-anchor="end" class="txt">D5</text>
+    <rect x="470" y="1000" width="42" height="25" class="socket"/><text x="455" y="1020" text-anchor="end" class="txt">D6</text>
+  </g>
+  <!-- C3 right official order -->
+  <g>
+    <rect x="988" y="790" width="42" height="25" class="socket"/><text x="1050" y="810" class="txt">VBUS / 5V</text>
+    <rect x="988" y="825" width="42" height="25" class="socket"/><text x="1050" y="845" class="txt">GND</text>
+    <rect x="988" y="860" width="42" height="25" class="socket"/><text x="1050" y="880" class="txt">3V3</text>
+    <rect x="988" y="895" width="42" height="25" class="socket"/><text x="1050" y="915" class="txt">D10</text>
+    <rect x="988" y="930" width="42" height="25" class="socket"/><text x="1050" y="950" class="txt">D9</text>
+    <rect x="988" y="965" width="42" height="25" class="socket"/><text x="1050" y="985" class="txt">D8</text>
+    <rect x="988" y="1000" width="42" height="25" class="socket"/><text x="1050" y="1020" class="txt">D7</text>
+  </g>
+
+  <!-- metro lines: endpoints are exact socket centers -->
+  <path d="M491 167 C350 167 300 845 1009 837" class="net gnd"/>
+  <path d="M491 202 C330 202 310 845 1009 837" class="net gnd"/>
+  <path d="M491 237 C400 237 400 500 1009 872" class="net pwr"/>
+  <path d="M491 272 C250 320 300 500 491 872" class="net rst"/>
+  <path d="M491 307 C220 350 270 500 491 837" class="net dio"/>
+  <path d="M1009 167 C1170 170 1190 845 1009 837" class="net gnd"/>
+  <path d="M1009 202 C1250 250 1240 500 491 907" class="net nss"/>
+  <path d="M1009 237 C1280 280 1300 500 1009 907" class="net mosi"/>
+  <path d="M1009 272 C1320 315 1330 500 1009 1022" class="net miso"/>
+  <path d="M1009 307 C1360 350 1370 500 491 977" class="net sck"/>
+
+  <!-- E-stop connector -->
+  <rect x="1110" y="1060" width="300" height="80" rx="10" class="note"/>
+  <text x="1130" y="1090" class="txt">LAY37 SOCKET</text>
+  <text x="1130" y="1117" class="legend">NC → D4   COM → GND</text>
+  <path d="M491 942 C720 1090 900 1090 1130 1117" class="net estop"/>
+
+  <rect x="70" y="1060" width="980" height="80" rx="10" class="note"/>
+  <text x="90" y="1090" class="txt">DEFAULT FROZEN FIRMWARE MAPPING</text>
+  <text x="90" y="1117" class="legend">RST→D2 • DIO0→D1 • NSS→D3 • MOSI→D10 • MISO→D7 • SCK→D5</text>
+</svg>

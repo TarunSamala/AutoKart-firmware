@@ -6,12 +6,12 @@ Hardware:
 - XIAO C3 transmitter
 
 Wiring verified:
-- SCK GPIO4
-- MOSI GPIO5
-- MISO GPIO6
-- CS GPIO7
-- RESET GPIO10
-- DIO0 GPIO18
+- SCK GPIO12
+- MOSI GPIO11
+- MISO GPIO10
+- CS GPIO9
+- RESET GPIO8
+- DIO0 GPIO17
 
 Tests:
 

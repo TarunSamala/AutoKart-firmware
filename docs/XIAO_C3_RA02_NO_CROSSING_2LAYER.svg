@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1050" viewBox="0 0 1600 1050">
+<style>
+.bg{fill:#0d1518}.board{fill:#164b3a;stroke:#071d18;stroke-width:8}.mod{fill:#22292e;stroke:#dcebe1;stroke-width:3}.pad{fill:#d4a63d;stroke:#2c2108;stroke-width:2}.h{fill:#fff;font:bold 27px Arial}.t{fill:#edf7ef;font:18px Arial}.s{fill:#b8d5c2;font:15px Arial}.track{fill:none;stroke-width:6;stroke-linecap:square;stroke-linejoin:miter}.g{stroke:#9aa5ac}.p{stroke:#ff4949}.rst{stroke:#4da6ff}.dio{stroke:#c084fc}.nss{stroke:#ff9f1c}.mosi{stroke:#35d274}.miso{stroke:#12c7dc}.sck{stroke:#ffe047}.via{fill:#fff;stroke:#111;stroke-width:3}.note{fill:#362d12;stroke:#e4b748;stroke-width:2}.label{fill:#17231d;font:15px Arial}
+</style>
+<rect width="1600" height="1050" class="bg"/>
+<rect x="25" y="25" width="1550" height="1000" rx="25" class="board"/>
+<text x="800" y="65" text-anchor="middle" class="h">RA-02 + XIAO ESP32-C3 — NO-CROSSING PCB ROUTING</text>
+<text x="800" y="93" text-anchor="middle" class="s">Default tested pinout • female sockets • separate copper-layer views</text>
+
+<!-- top layer -->
+<rect x="65" y="125" width="700" height="810" rx="18" fill="#1d5e49" stroke="#8bc6a4" stroke-width="3"/>
+<text x="415" y="165" text-anchor="middle" class="h">TOP COPPER — POWER / GROUND</text>
+<rect x="285" y="215" width="260" height="130" class="mod"/><text x="415" y="285" text-anchor="middle" class="h">RA-02</text>
+<rect x="285" y="700" width="260" height="130" class="mod"/><text x="415" y="770" text-anchor="middle" class="h">XIAO C3</text>
+<circle cx="220" cy="245" r="11" class="pad"/><text x="195" y="251" text-anchor="end" class="t">RA GND</text>
+<circle cx="610" cy="245" r="11" class="pad"/><text x="635" y="251" class="t">RA GND</text>
+<circle cx="220" cy="285" r="11" class="pad"/><text x="195" y="291" text-anchor="end" class="t">RA 3V3</text>
+<circle cx="610" cy="750" r="11" class="pad"/><text x="635" y="756" class="t">C3 3V3</text>
+<circle cx="220" cy="325" r="11" class="pad"/><text x="195" y="331" text-anchor="end" class="t">RA GND</text>
+<circle cx="610" cy="790" r="11" class="pad"/><text x="635" y="796" class="t">C3 GND</text>
+<path d="M220 245 H150 V875 H650 V790 H610" class="track g"/>
+<path d="M610 245 H650 V790" class="track g"/>
+<path d="M220 325 H175 V875" class="track g"/>
+<path d="M220 285 H120 V895 H700 V750 H610" class="track p"/>
+<text x="415" y="885" text-anchor="middle" class="s">Continuous GND plane recommended</text>
+<text x="415" y="910" text-anchor="middle" class="s">3V3 rail kept separate from VBUS/5V</text>
+
+<!-- bottom layer -->
+<rect x="835" y="125" width="700" height="810" rx="18" fill="#123d5b" stroke="#73b4dc" stroke-width="3"/>
+<text x="1185" y="165" text-anchor="middle" class="h">BOTTOM COPPER — SIGNALS</text>
+<rect x="1055" y="215" width="260" height="130" class="mod"/><text x="1185" y="285" text-anchor="middle" class="h">RA-02</text>
+<rect x="1055" y="700" width="260" height="130" class="mod"/><text x="1185" y="770" text-anchor="middle" class="h">XIAO C3</text>
+
+<!-- source and destination pads -->
+<circle cx="990" cy="245" r="10" class="pad"/><text x="965" y="251" text-anchor="end" class="t">RST</text>
+<circle cx="990" cy="285" r="10" class="pad"/><text x="965" y="291" text-anchor="end" class="t">DIO0</text>
+<circle cx="1380" cy="245" r="10" class="pad"/><text x="1405" y="251" class="t">NSS</text>
+<circle cx="1380" cy="275" r="10" class="pad"/><text x="1405" y="281" class="t">MOSI</text>
+<circle cx="1380" cy="305" r="10" class="pad"/><text x="1405" y="311" class="t">MISO</text>
+<circle cx="1380" cy="335" r="10" class="pad"/><text x="1405" y="341" class="t">SCK</text>
+<circle cx="990" cy="760" r="10" class="pad"/><text x="965" y="766" text-anchor="end" class="t">D2</text>
+<circle cx="990" cy="800" r="10" class="pad"/><text x="965" y="806" text-anchor="end" class="t">D1</text>
+<circle cx="1380" cy="745" r="10" class="pad"/><text x="1405" y="751" class="t">D10</text>
+<circle cx="1380" cy="785" r="10" class="pad"/><text x="1405" y="791" class="t">D7</text>
+<circle cx="990" cy="840" r="10" class="pad"/><text x="965" y="846" text-anchor="end" class="t">D3</text>
+<circle cx="990" cy="880" r="10" class="pad"/><text x="965" y="886" text-anchor="end" class="t">D5</text>
+
+<!-- non-crossing signal corridors -->
+<path d="M990 245 H900 V500 H950 V760 H990" class="track rst"/>
+<path d="M990 285 H875 V540 H925 V800 H990" class="track dio"/>
+<path d="M1380 245 H1480 V450 H1450 V600 H850 V840 H990" class="track nss"/>
+<path d="M1380 275 H1460 V480 H1420 V745 H1380" class="track mosi"/>
+<path d="M1380 305 H1440 V520 H1400 V785 H1380" class="track miso"/>
+<path d="M1380 335 H1510 V570 H1300 V950 H850 V880 H990" class="track sck"/>
+
+<!-- vias are layer changes, not trace crossings -->
+<circle cx="950" cy="500" r="9" class="via"/><text x="965" y="495" class="s">V1</text>
+<circle cx="925" cy="540" r="9" class="via"/><text x="940" y="535" class="s">V2</text>
+<text x="1185" y="900" text-anchor="middle" class="s">Each layer is independently non-crossing</text>
+<text x="1185" y="923" text-anchor="middle" class="s">V1/V2 are plated vias or jumper points</text>
+
+<rect x="130" y="955" width="1240" height="48" rx="8" class="note"/>
+<text x="750" y="986" text-anchor="middle" class="t">Default mapping: RST→D2 • DIO0→D1 • NSS→D3 • MOSI→D10 • MISO→D7 • SCK→D5</text>
+</svg>
