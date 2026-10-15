@@ -1,5 +1,9 @@
 # Pico 2 + RA-02 + LAY37 emergency-stop test
 
+This is now the selected AutoKart LoRa E-stop transmitter hardware. Production
+firmware and upload commands are in
+`Lora/PICO2_RA02_ESTOP_PRODUCTION/README.md`.
+
 ## Wiring
 
 | RA-02 | Raspberry Pi Pico 2 |

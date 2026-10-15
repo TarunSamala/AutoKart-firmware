@@ -75,6 +75,16 @@ For the RA-02 and LAY37 emergency-stop wiring, see
 `bench/pico2_ra02_estop_test.py`; it checks the RA-02 SPI identity and reports
 the emergency-stop input without transmitting or moving actuators.
 
+The final transmitter firmware is:
+
+```text
+Lora/PICO2_RA02_ESTOP_PRODUCTION/main.py
+```
+
+With the current two-board USB setup, Pico 2 is `/dev/ttyACM0` and ESP32-S3
+is `/dev/ttyACM1`. The complete upload commands are in the production
+transmitter README. Recheck port names after reconnecting either board.
+
 ## RA-02 with ESP8266MOD
 
 The ESP8266MOD RA-02 SPI wiring is documented in
@@ -92,13 +102,23 @@ bench/ra02_lora_chat_esp8266.py
 bench/ra02_lora_chat_esp32s3.py
 ```
 
-For the combined fail-stop bench test, upload
-`bench/pico2_ra02_estop_transmitter.py` to the Pico 2 and
-`bench/full_bldc_lora_estop_esp32s3.py` to the ESP32-S3. The ESP32 requires
-the shared `bench/ra02_lora_chat_common.py` module and will keep the BLD-750
-stopped until it receives a valid Pico heartbeat.
+For the final standalone LoRa link, use
+`Lora/PICO2_RA02_ESTOP_PRODUCTION/main.py` on the Pico 2 and
+`Lora/ESP32S3_RA02_ESTOP_RECEIVER_PRODUCTION/standalone_estop_receiver.py`
+on the ESP32-S3. This explicit-state design has no healthy-state heartbeat.
+The older combined BLD750/LoRa file remains a separate bench experiment.
 
 ## Integrated firmware
+
+The conflict-free vehicle GPIO allocation for the encoders, steering, brake,
+traction, LoRa E-stop receiver, and Raspberry Pi 4B is documented in:
+
+```text
+docs/AUTOKART_ESP32S3_MASTER_PINOUT.md
+```
+
+Use that master allocation for integrated wiring. Individual bench-test files
+may intentionally use older, overlapping pins.
 
 The main actuator controller is currently:
 

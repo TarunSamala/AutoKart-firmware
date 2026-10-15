@@ -1,4 +1,8 @@
-XIAO ESP32-C3 + RA-02 Production E-Stop Firmware
+# Legacy XIAO ESP32-C3 + RA-02 E-stop firmware
+
+This implementation is retained for reference but is no longer the selected
+AutoKart transmitter. Use `Lora/PICO2_RA02_ESTOP_PRODUCTION/` for the final
+Pico 2 transmitter.
 
 Hardware:
 - XIAO ESP32-C3

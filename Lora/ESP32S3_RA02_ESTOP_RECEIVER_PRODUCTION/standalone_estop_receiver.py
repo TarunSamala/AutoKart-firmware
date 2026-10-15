@@ -117,7 +117,7 @@ class SX1278:
         self.write_register(self.FIFO_RX_BASE, 0)
         self.write_register(self.LNA, self.read_register(self.LNA) | 0x03)
 
-        # Must exactly match the C3 transmitter.
+        # Must exactly match the Pico 2 transmitter.
         self.write_register(self.MODEM_CONFIG_1, 0x72)
         self.write_register(self.MODEM_CONFIG_2, 0x74)
         self.write_register(self.MODEM_CONFIG_3, 0x04)
@@ -212,7 +212,7 @@ estop_active = None
 last_sequence = None
 
 print("Receiver state: UNKNOWN")
-print("Waiting for C3 ESTOP packets...")
+print("Waiting for Pico 2 ESTOP packets...")
 
 while True:
     packet = radio.receive()

@@ -3,7 +3,7 @@
 Hardware:
 - ESP32-S3
 - RA-02 433MHz
-- XIAO C3 transmitter
+- Raspberry Pi Pico 2 transmitter
 
 Wiring verified:
 - SCK GPIO12
@@ -20,9 +20,11 @@ Tests:
 [ ] Valid ESTOP packet accepted
 [ ] Invalid CRC rejected
 [ ] Sequence changes detected
-[ ] Transmitter power OFF causes STOP
-[ ] RA-02 disconnected causes STOP
-[ ] Reset causes safe output
+[ ] Pico startup sends its actual switch state
+[ ] Pressed/open NC circuit sends STOP repeatedly
+[ ] Releasing the switch sends CLEAR repeatedly
+[ ] Transmitter power OFF does not create a false state transition
+[ ] Receiver reset starts in UNKNOWN
 
 Vehicle tests:
 [ ] Bench only
@@ -30,5 +32,7 @@ Vehicle tests:
 [ ] Manual low speed
 [ ] Fault injection
 
-PASS:
-Loss of communication must never allow motion.
+Current deliberate behavior:
+There is no healthy-state heartbeat or disconnect timeout. The receiver
+changes state only after a valid explicit packet. An independent hardware
+safety chain must provide the final fail-safe behavior.
