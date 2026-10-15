@@ -2,6 +2,10 @@
 
 These are standalone bench tests. They may overlap with AutoKart actuator pins during bring-up, but disconnect the actuator hardware while testing.
 
+For the conflict-free integrated kart allocation, use
+`docs/AUTOKART_ESP32S3_MASTER_PINOUT.md`. The pinouts below remain unchanged
+because they document isolated test programs.
+
 ## AS5600 — I2C
 
 The AS5600 uses I2C address `0x36` and exposes raw/mapped angle registers.

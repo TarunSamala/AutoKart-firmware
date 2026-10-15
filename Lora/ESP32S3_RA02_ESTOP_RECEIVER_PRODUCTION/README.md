@@ -3,7 +3,8 @@ ESP32-S3 RA-02 E-STOP Receiver
 Vehicle-side LoRa receiver.
 
 Source:
-XIAO ESP32-C3 transmitter.
+Raspberry Pi Pico 2 transmitter in
+`Lora/PICO2_RA02_ESTOP_PRODUCTION/`.
 
 RA-02 receiver wiring on the ESP32-S3 terminal adapter:
 

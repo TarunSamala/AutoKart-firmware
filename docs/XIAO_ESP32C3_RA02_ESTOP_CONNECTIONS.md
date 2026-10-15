@@ -1,5 +1,9 @@
 # XIAO ESP32-C3 + RA-02 + LAY37 E-stop transmitter
 
+> Legacy wiring: AutoKart now uses the Pico 2 transmitter documented in
+> `docs/PICO2_RA02_ESTOP_CONNECTIONS.md` and
+> `Lora/PICO2_RA02_ESTOP_PRODUCTION/README.md`.
+
 ## RA-02 wiring
 
 | RA-02 pin | XIAO label | ESP32-C3 GPIO |

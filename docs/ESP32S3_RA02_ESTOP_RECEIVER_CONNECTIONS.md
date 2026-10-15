@@ -1,7 +1,10 @@
 # ESP32-S3 + RA-02 LoRa E-stop receiver
 
-This is the vehicle-side receiver for the XIAO ESP32-C3 + RA-02 + LAY37
-transmitter.
+This is the vehicle-side receiver for the Raspberry Pi Pico 2 + RA-02 +
+LAY37 transmitter.
+
+For the complete integrated vehicle allocation, see
+`docs/AUTOKART_ESP32S3_MASTER_PINOUT.md`.
 
 ## Wiring
 
@@ -9,22 +12,22 @@ transmitter.
 |---|---:|
 | VCC / 3.3V | 3V3 |
 | GND | GND |
-| SCK | GPIO4 |
-| MOSI | GPIO5 |
-| MISO | GPIO6 |
-| NSS / CS | GPIO7 |
-| RESET | GPIO10 |
-| DIO0 | GPIO18 |
+| SCK | GPIO12 |
+| MOSI | GPIO11 |
+| MISO | GPIO10 |
+| NSS / CS | GPIO9 |
+| RESET | GPIO8 |
+| DIO0 | GPIO17 |
 
 ```text
 ESP32-S3 3V3  ───────── RA-02 VCC
 ESP32-S3 GND  ───────── RA-02 GND
-ESP32-S3 IO4  ───────── RA-02 SCK
-ESP32-S3 IO5  ───────── RA-02 MOSI
-ESP32-S3 IO6  ───────── RA-02 MISO
-ESP32-S3 IO7  ───────── RA-02 NSS / CS
-ESP32-S3 IO10 ───────── RA-02 RESET
-ESP32-S3 IO18 ───────── RA-02 DIO0
+ESP32-S3 IO12 ───────── RA-02 SCK
+ESP32-S3 IO11 ───────── RA-02 MOSI
+ESP32-S3 IO10 ───────── RA-02 MISO
+ESP32-S3 IO9  ───────── RA-02 NSS / CS
+ESP32-S3 IO8  ───────── RA-02 RESET
+ESP32-S3 IO17 ───────── RA-02 DIO0
 ```
 
 Connect a 433 MHz antenna before transmitting. Power the RA-02 from 3.3 V
@@ -32,9 +35,9 @@ only. Place a 100 nF ceramic capacitor and a 10–100 µF bulk capacitor close
 to the RA-02 between VCC and GND. A 10 kΩ pull-up from NSS/CS to 3.3 V is
 recommended so the radio remains deselected during ESP32-S3 startup.
 
-GPIO4 and GPIO5 overlap with the temporary R86mini STEP/DIR motor tests.
-Disconnect those motor-driver signal wires before connecting this radio.
-The mapping leaves the BLDC GPIO13/14/15 controls untouched.
+This mapping leaves the R86mini GPIO4/5 and BLD750 GPIO13/14/15 controls
+untouched. GPIO8/9 are no longer available for the integrated I2C bus; the
+master allocation moves I2C to GPIO1/2.
 
 ## Receiver behavior
 
