@@ -85,7 +85,7 @@ already-enabled PWM signal.
 Suggested test wiring:
 
 ```text
-AS5047P W/PWM or module PWM -> ESP32-S3 GPIO4
+AS5047P W/PWM or module PWM -> ESP32-S3 GPIO7
 AS5047P GND                 -> ESP32-S3 GND
 AS5047P supply              -> voltage required by the breakout board
 ```
@@ -101,18 +101,20 @@ connections for that setup test:
 
 ```text
 AS5047P CSn   -> ESP32-S3 GPIO16
-AS5047P CLK   -> ESP32-S3 GPIO13
-AS5047P MOSI  -> ESP32-S3 GPIO14
-AS5047P MISO  -> ESP32-S3 GPIO15
-AS5047P W/PWM -> ESP32-S3 GPIO4
+AS5047P CLK   -> ESP32-S3 GPIO18
+AS5047P MOSI  -> ESP32-S3 GPIO41
+AS5047P MISO  -> ESP32-S3 GPIO42
+AS5047P W/PWM -> ESP32-S3 GPIO7
 ```
 
 The setting is volatile and is lost after reset or power cycling. The test
-does not burn OTP or permanently change the encoder. `UVW_ABI=1` would select
-`I/PWM` instead. The AS5047P datasheet defines `PWMon` at bit 7 and the PWM
-output selection at bit 3 of `SETTINGS1`.
+preserves the existing SETTINGS1 value, enables `PWMon`, and selects W/PWM.
+It does not burn OTP or permanently change the encoder. `UVW_ABI=1` would
+select `I/PWM` instead. The AS5047P datasheet defines `PWMon` at bit 7 and
+the PWM output selection at bit 3 of `SETTINGS1`.
 
-Run `bench/as5047p_pwm_isolated_test.py` as `main.py`. It reports PWM high
+Run `bench/as5047p_enable_w_pwm_test.py` as `main.py`. It configures the
+volatile PWM setting, verifies its readback, and reports PWM high
 time, low time, period, frequency, duty cycle, 12-bit PWM raw angle data, and
 degrees. The AS5047P PWM frame is nominally 4119 clock periods; its angle data
 contains 0-4095 clocks, with a typical 444 ns clock period.
