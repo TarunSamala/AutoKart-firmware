@@ -99,7 +99,8 @@ def main():
     print("Raspberry Pi MPU-9250/6500 I2C test")
     print("Using /dev/i2c-{}".format(args.bus))
 
-    with SMBus(args.bus) as bus:
+    bus = SMBus(args.bus)
+    try:
         address, identity, model = detect(bus)
 
         if address is None:
@@ -144,6 +145,10 @@ def main():
                 time.sleep(max(0.01, args.interval))
         except KeyboardInterrupt:
             print("\nIMU test stopped")
+    finally:
+        close = getattr(bus, "close", None)
+        if close is not None:
+            close()
 
 
 if __name__ == "__main__":
