@@ -9,32 +9,47 @@ Meukron/adapter-board wiring:
   5V or 3V3      -> board supply selected for the breakout
   GND            -> ESP32-S3 GND
   CSn            -> ESP32-S3 GPIO16
-  CLK            -> ESP32-S3 GPIO13
-  MOSI           -> ESP32-S3 GPIO14
-  MISO           -> ESP32-S3 GPIO15
-  W/PWM          -> ESP32-S3 GPIO4
+  CLK            -> ESP32-S3 GPIO18
+  MOSI           -> ESP32-S3 GPIO41
+  MISO           -> ESP32-S3 GPIO42
+  W/PWM          -> ESP32-S3 GPIO7
 
-Use a 3.3 V logic-level PWM output. Do not connect a 5 V signal to GPIO4.
-SETTINGS1 = 0x0081 means factory bit set, W/PWM selected, and PWMon enabled.
+Use a 3.3 V logic-level PWM output. Do not connect a 5 V signal to GPIO7.
+The existing SETTINGS1 value is preserved, PWMon is enabled, and UVW_ABI is
+cleared to route PWM to W/PWM. No OTP is programmed.
 """
 
 from machine import Pin, SPI, time_pulse_us
 import time
 
 
-SPI_SCK = 13
-SPI_MOSI = 14
-SPI_MISO = 15
+SPI_SCK = 18
+SPI_MOSI = 41
+SPI_MISO = 42
 SPI_CS = 16
-PWM_PIN = 4
+PWM_PIN = 7
 
 SPI_BAUDRATE = 1000000
 SETTINGS1 = 0x0018
-SETTINGS1_W_PWM_ON = 0x0081
+PW_MON_MASK = 0x0080
+UVW_ABI_MASK = 0x0008
 TIMEOUT_US = 100000
 PWM_CLOCK_US = 0.444
-INIT_CLOCKS = 12
+# A normal PWM high interval contains 12 INIT clocks and four healthy
+# error-status clocks before the angle-data clocks.
+PWM_HIGH_OVERHEAD_CLOCKS = 16
 DATA_CLOCKS = 4095
+MIN_VALID_HIGH_US = 6
+MAX_VALID_HIGH_US = 1900
+PWM_SAMPLES = 7
+REG_ANGLECOM = 0x3FFF
+REG_DIAAGC = 0x3FFC
+REG_MAG = 0x3FFD
+
+DIAAGC_MAGL = 1 << 11
+DIAAGC_MAGH = 1 << 10
+DIAAGC_COF = 1 << 9
+DIAAGC_LF = 1 << 8
 
 
 def even_parity(frame):
@@ -63,6 +78,22 @@ spi = SPI(
 )
 
 
+def transfer(frame):
+    tx = spi_frame(frame)
+    rx = bytearray(2)
+    cs.value(0)
+    spi.write_readinto(tx, rx)
+    cs.value(1)
+    time.sleep_us(2)
+    return (rx[0] << 8) | rx[1]
+
+
+def read_register(register):
+    command = even_parity(0x4000 | (register & 0x3FFF))
+    transfer(command)
+    return transfer(0x0000) & 0x3FFF
+
+
 def write_register(register, value):
     command = even_parity(register & 0x3FFF)       # RW=0: write
     data = even_parity(value & 0x3FFF)
@@ -80,37 +111,107 @@ def write_register(register, value):
 
 def capture_pwm():
     pin = Pin(PWM_PIN, Pin.IN)
-    high_us = time_pulse_us(pin, 1, TIMEOUT_US)
-    low_us = time_pulse_us(pin, 0, TIMEOUT_US)
-    if high_us < 0 or low_us < 0:
-        raise RuntimeError(
-            "PWM edge timeout (high={}, low={})".format(high_us, low_us)
-        )
+    valid_highs = []
+    rejected = 0
 
-    period_us = high_us + low_us
-    frequency_hz = 1000000.0 / period_us if period_us else 0.0
-    duty_percent = 100.0 * high_us / period_us if period_us else 0.0
-    raw = int(round(high_us / PWM_CLOCK_US)) - INIT_CLOCKS
+    # time_pulse_us() calls made separately for HIGH and LOW can lock onto
+    # different frames when Python resumes between calls. Angle information is
+    # entirely in the HIGH width, so collect and median-filter HIGH pulses only.
+    for _ in range(PWM_SAMPLES * 4):
+        high_us = time_pulse_us(pin, 1, TIMEOUT_US)
+        if MIN_VALID_HIGH_US <= high_us <= MAX_VALID_HIGH_US:
+            valid_highs.append(high_us)
+            if len(valid_highs) >= PWM_SAMPLES:
+                break
+        else:
+            rejected += 1
+
+    if not valid_highs:
+        raise RuntimeError("no valid W/PWM high pulse detected")
+
+    valid_highs.sort()
+    high_us = valid_highs[len(valid_highs) // 2]
+    raw = (
+        int(round(high_us / PWM_CLOCK_US))
+        - PWM_HIGH_OVERHEAD_CLOCKS
+    )
     raw = max(0, min(DATA_CLOCKS, raw))
     angle = raw * 360.0 / DATA_CLOCKS
-    return high_us, low_us, period_us, frequency_hz, duty_percent, raw, angle
+    return high_us, raw, angle, len(valid_highs), rejected
+
+
+def read_magnet_diagnostics():
+    diaagc = read_register(REG_DIAAGC)
+    magnitude = read_register(REG_MAG)
+    agc = diaagc & 0xFF
+    mag_low = bool(diaagc & DIAAGC_MAGL)
+    mag_high = bool(diaagc & DIAAGC_MAGH)
+    cordic_overflow = bool(diaagc & DIAAGC_COF)
+    loops_finished = bool(diaagc & DIAAGC_LF)
+
+    if mag_high:
+        status = "MAGNET TOO STRONG"
+    elif mag_low:
+        # AS5047P has one field-too-low flag. It cannot reliably distinguish
+        # a distant/weak magnet from no magnet using a separate status bit.
+        status = "MAGNET TOO WEAK / NO MAGNET"
+    elif cordic_overflow:
+        status = "MAGNET INVALID / CORDIC OVERFLOW"
+    elif not loops_finished:
+        status = "MAGNET NOT READY"
+    else:
+        status = "MAGNET OK"
+
+    return status, agc, magnitude, diaagc
 
 
 def print_pwm():
-    high_us, low_us, period_us, frequency_hz, duty, raw, angle = capture_pwm()
+    high_us, raw, angle, accepted, rejected = capture_pwm()
+    spi_raw = read_register(REG_ANGLECOM) & 0x3FFF
+    spi_angle = spi_raw * 360.0 / 16384.0
+    difference = (angle - spi_angle + 180.0) % 360.0 - 180.0
+    magnet_status, agc, magnitude, diaagc = read_magnet_diagnostics()
     print(
-        "HIGH {:6d} us | LOW {:6d} us | PERIOD {:7d} us | "
-        "FREQ {:7.1f} Hz | DUTY {:6.2f}%".format(
-            high_us, low_us, period_us, frequency_hz, duty
+        "PWM HIGH {:4d} us | RAW {:4d}/4095 | ANGLE {:8.3f} deg | "
+        "samples {}/{}".format(
+            high_us, raw, angle, accepted, accepted + rejected
         )
     )
-    print("RAW PWM: {:4d}/4095 | ANGLE: {:8.3f} deg".format(raw, angle))
+    print(
+        "SPI RAW {:5d}/16383 | ANGLE {:8.3f} deg | "
+        "PWM-SPI DELTA {:+7.3f} deg".format(
+            spi_raw, spi_angle, difference
+        )
+    )
+    print(
+        "{} | AGC 0x{:02X} | MAG 0x{:04X} | DIAAGC 0x{:04X}".format(
+            magnet_status, agc, magnitude, diaagc
+        )
+    )
 
 
 print("\nESP32-S3 AS5047P W/PWM ENABLE + READ TEST")
 print("No braking, steering, TB6600, or motor control is used.")
-print("Configuring SETTINGS1 = 0x{:04X}".format(SETTINGS1_W_PWM_ON))
-write_register(SETTINGS1, SETTINGS1_W_PWM_ON)
+print(
+    "SPI: SCK GPIO{} MOSI GPIO{} MISO GPIO{} CS GPIO{}".format(
+        SPI_SCK, SPI_MOSI, SPI_MISO, SPI_CS
+    )
+)
+
+settings_before = read_register(SETTINGS1)
+settings_target = (settings_before | PW_MON_MASK) & ~UVW_ABI_MASK
+print("SETTINGS1 before: 0x{:04X}".format(settings_before))
+print("Writing SETTINGS1: 0x{:04X}".format(settings_target))
+write_register(SETTINGS1, settings_target)
+settings_after = read_register(SETTINGS1)
+print("SETTINGS1 after : 0x{:04X}".format(settings_after))
+
+if (settings_after & PW_MON_MASK) == 0:
+    raise RuntimeError("PWMon did not enable; check SPI wiring")
+
+if settings_after & UVW_ABI_MASK:
+    raise RuntimeError("PWM is routed to I/PWM, not W/PWM")
+
 print("PWM enabled on W/PWM; output pin is ESP32-S3 GPIO{}".format(PWM_PIN))
 print("Type r for one reading, stream for continuous data, or q to stop.")
 
