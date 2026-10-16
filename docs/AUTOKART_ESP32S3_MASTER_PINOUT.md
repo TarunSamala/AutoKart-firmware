@@ -1,6 +1,6 @@
 # AutoKart ESP32-S3 master pinout
 
-Revision: A — 15 October 2026
+Revision: B — 16 October 2026
 
 This is the authoritative integrated pin allocation for the AutoKart
 ESP32-S3 N8R2 controller. It supersedes the pin assignments in isolated bench
@@ -11,10 +11,14 @@ Assumed actuator assignment:
 - R86mini + NEMA34: steering
 - TB6600 + stepper: brake
 - BLD750 + GP8630N DAC: traction
-- AS5047P: steering-angle feedback
-- AS5600: brake-position feedback
-- RA-02: LoRa emergency-stop receiver; Pico 2 is the remote transmitter
-- Raspberry Pi 4B: high-level controller over UART
+- AS5047P: BLDC/motor-shaft encoder
+- AS5600: steering-angle feedback
+- RA-02: LoRa emergency-stop receiver; transmitter MCU selection is pending
+- Raspberry Pi 4B: high-level controller over native USB micro-ROS
+
+There is no brake-position encoder in the current design. The LoRa E-stop is
+being separated from normal actuator control; Pico 2 versus XIAO ESP32-C3 for
+the remote transmitter remains an open hardware decision.
 
 ## Final GPIO allocation
 
@@ -25,7 +29,7 @@ Assumed actuator assignment:
 | 4 | STEP / PUL | R86mini steering | Output | Bench-proven assignment |
 | 5 | DIR | R86mini steering | Output | Bench-proven assignment |
 | 6 | ENA | R86mini steering | Output | Reserved; optional |
-| 7 | W/PWM angle | AS5047P | Input | Final runtime assignment; test pending |
+| 7 | W/PWM bench signal | AS5047P | Input | Provisional test point; not production-frozen |
 | 8 | RESET | RA-02 | Output | Frozen receiver assignment |
 | 9 | NSS / CS | RA-02 | Output | Frozen receiver assignment |
 | 10 | MISO | RA-02 | Input | Frozen receiver assignment |
@@ -34,25 +38,24 @@ Assumed actuator assignment:
 | 13 | BRK transistor | BLD750 | Output | Bench-proven assignment |
 | 14 | EN transistor | BLD750 | Output | Bench-proven assignment |
 | 15 | F/R transistor | BLD750 | Output | Bench-proven assignment |
-| 16 | CSn | AS5047P configuration header | Output | Optional startup/configuration SPI |
+| 16 | CSn | AS5047P SPI | Output | Candidate production SPI interface |
 | 17 | DIO0 | RA-02 | Input | Frozen receiver assignment |
-| 18 | CLK / SCK | AS5047P configuration header | Output | Optional startup/configuration SPI |
-| 21 | UART TX | Raspberry Pi 4B RX | Output | New integrated assignment |
+| 18 | CLK / SCK | AS5047P SPI | Output | Candidate production SPI interface |
 | 38 | STEP / PUL | TB6600 brake | Output | New integrated assignment |
 | 39 | DIR | TB6600 brake | Output | New integrated assignment |
 | 40 | ENA | TB6600 brake | Output | New integrated assignment |
-| 41 | MOSI | AS5047P configuration header | Output | Optional startup/configuration SPI |
-| 42 | MISO | AS5047P configuration header | Input | Optional startup/configuration SPI |
-| 47 | UART RX | Raspberry Pi 4B TX | Input | New integrated assignment |
+| 41 | MOSI | AS5047P SPI | Output | Candidate production SPI interface |
+| 42 | MISO | AS5047P SPI | Input | Candidate production SPI interface |
 
-GPIO48 remains unallocated. GPIO19 and GPIO20 remain reserved for
-native USB. Do not use GPIO0, GPIO3, GPIO45, or GPIO46 for this design because
-they are boot-strapping pins. GPIO26 through GPIO37 are intentionally avoided
-because they can be occupied by flash/PSRAM signals on ESP32-S3 variants.
+GPIO21, GPIO47, and GPIO48 remain unallocated. GPIO19 and GPIO20 remain
+reserved for native USB. Do not use GPIO0, GPIO3, GPIO45, or GPIO46 for this
+design because they are boot-strapping pins. GPIO26 through GPIO37 are
+intentionally avoided because they can be occupied by flash/PSRAM signals on
+ESP32-S3 variants.
 
 ## Component connection sheets
 
-### AS5600 brake encoder
+### AS5600 steering encoder
 
 | AS5600 | ESP32-S3 |
 |---|---|
@@ -144,7 +147,7 @@ Confirm the installed TB6600 input polarity before enabling motion. The final
 brake fail-safe state must be verified physically; an ESP32 reset must not
 release the brake unexpectedly.
 
-### AS5047P steering encoder — PWM runtime interface
+### AS5047P BLDC encoder — production interface selection pending
 
 | AS5047P | ESP32-S3 |
 |---|---|
@@ -171,10 +174,13 @@ diagnostics:
 | MOSI | GPIO41 |
 | MISO | GPIO42 |
 
-Once SPI has enabled PWM, normal angle measurements use only W/PWM on GPIO7.
-The SPI header does not conflict with the RA-02 bus.
+GPIO7 preserves the W/PWM bench test but PWM is not accepted as the production
+interface. Production firmware must select and validate either continuous SPI
+angle sampling on GPIO16/18/41/42 or A/B/I hardware counting. If A/B/I is
+selected, allocate its three inputs before freezing the PCB. The candidate SPI
+interface does not conflict with the RA-02 bus.
 
-### RA-02 LoRa E-stop receiver
+### RA-02 LoRa E-stop receiver — provisional monitoring interface
 
 | RA-02 | ESP32-S3 |
 |---|---|
@@ -190,17 +196,22 @@ The SPI header does not conflict with the RA-02 bus.
 Fit a 100 nF ceramic capacitor and a 10–100 uF bulk capacitor close to RA-02
 VCC/GND, and connect the correct 433 MHz antenna before transmitting.
 
-### Raspberry Pi 4B UART
+These pins preserve the working ESP32-S3 receiver bench connection. They do
+not make the E-stop independent: the production design must use a separately
+validated isolation path that does not depend on ROS, Linux, normal VCU tasks,
+or continued wireless communication. The transmitter controller is not frozen;
+Pico 2 and XIAO ESP32-C3 remain candidates.
 
-| Raspberry Pi 4B | Physical pin | ESP32-S3 |
-|---|---:|---|
-| GPIO14 / TXD | 8 | GPIO47 / RX |
-| GPIO15 / RXD | 10 | GPIO21 / TX |
-| GND | 6 | GND |
+### Raspberry Pi 4B communication
 
-This is a crossed UART connection: TX goes to RX. Both sides use 3.3 V logic;
-do not connect the Pi 5 V rail to an ESP32-S3 GPIO. Enable the Pi UART and
-disable its serial login console before using this link.
+The production communication target is native USB with a micro-ROS Agent on
+the Raspberry Pi. GPIO19/GPIO20 remain reserved for the ESP32-S3 native USB
+interface. GPIO21/GPIO47 are no longer reserved for Pi UART and remain
+available until another function is frozen.
+
+USB micro-ROS has not yet been implemented or validated in this repository.
+The current MicroPython bench firmware is retained for component tests; the
+production VCU is planned as ESP-IDF + FreeRTOS firmware.
 
 ## Bus summary
 
@@ -210,9 +221,10 @@ AS5600 (0x36) --------+
 GP8630N (0x58) -------+
 
 RA-02 ------------------- SPI: SCK12 MOSI11 MISO10 CS9, RST8, DIO0 17
-AS5047P runtime ----------- W/PWM GPIO7
-AS5047P config header ----- SPI mode 1: SCK18 MOSI41 MISO42 CS16
-Raspberry Pi 4B ---------- UART: ESP TX21 / RX47
+AS5047P production ------- Interface TBD: SPI or A/B/I
+AS5047P candidate SPI ----- SPI mode 1: SCK18 MOSI41 MISO42 CS16
+AS5047P PWM bench point --- W/PWM GPIO7 (not production-frozen)
+Raspberry Pi 4B ---------- Native USB micro-ROS: GPIO19/20 reserved
 R86mini steering --------- STEP4 / DIR5 / ENA6
 TB6600 brake ------------- STEP38 / DIR39 / ENA40
 BLD750 digital controls -- BRK13 / EN14 / F-R15
@@ -222,10 +234,10 @@ BLD750 digital controls -- BRK13 / EN14 / F-R15
 
 The actuator, AS5600, GP8630N, and LoRa subsystems have been bench-tested in
 their individual configurations. The combined GPIO1/2 I2C wiring is the final
-integrated assignment and still needs to be tested as one shared bus. AS5047P
-PWM on GPIO7 and the Raspberry Pi UART on GPIO21/47 remain untested. Any
-subsystem moved away from its original bench-test GPIOs requires firmware
-migration and another powered validation.
+integrated assignment and still needs to be tested as one shared bus. The
+AS5047P production interface and Raspberry Pi native USB micro-ROS remain
+unvalidated. Any subsystem moved away from its original bench-test GPIOs
+requires firmware migration and another powered validation.
 
 Before moving the kart under power:
 
