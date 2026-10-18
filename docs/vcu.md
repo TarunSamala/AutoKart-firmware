@@ -1,7 +1,7 @@
 # AutoKart — VCU Engineering Specification
 
 **Document:** `vcu.md`  
-**Revision:** 0.2 — 2026-10-16  
+**Revision:** 0.3 — 2026-10-18
 **Project:** AutoKart / AKGOS / RC-06  
 **Target:** ESP32-S3 VCU ↔ Raspberry Pi (ROS 2 Humble)  
 **Design verdict:** **APPROVED WITH CONDITIONS** for implementation and traction-isolated bench development.  
@@ -40,7 +40,7 @@
 | Ground clearance | **38.1 mm** | Reported |
 | Front tyre width | Spreadsheet **279.4 mm** vs tyre marking nominal **114.3 mm** | **CONFLICT — measure inflated section width** |
 | Total operating mass | Prior estimate **130 kg** | Needs weighed value/load distribution |
-| Brake physical feedback | **NOT INSTALLED — no brake encoder** | **Autonomous arming blocker unless an alternative verified stopping safety case is approved** |
+| Brake physical feedback | **AS5600 selected; mounted/integrated validation pending** | Autonomous arming remains blocked until calibration and stopping tests pass |
 | AS5047P mounting | **BLDC/motor side** | Confirm exact shaft, magnet installation and intervening gearbox |
 
 ### 2.2 Steering — latest correction overrides earlier notes
@@ -54,7 +54,7 @@
 | NEMA34 driver | **R86mini** | Reported current hardware |
 | Driver setting | **3200 pulses/motor rev**, if unchanged | Check R86mini DIP settings physically |
 | Actual left/right road-wheel angle and linkage conversion | **UNKNOWN** | Must measure; shaft angle ≠ road-wheel angle |
-| AS5600 function | **Steering feedback** | Confirm exact downstream/output mounting and road-wheel calibration |
+| AS5600 function | **Steering feedback plus separate brake-position feedback** | Use TCA9548A channels; mounted calibration remains pending |
 
 ### 2.3 Architecture decisions and current proposals
 
@@ -62,7 +62,7 @@
 |---|---|
 | Drivetrain encoder | AS5047P on the BLDC/motor side |
 | Steering encoder | AS5600 |
-| Brake encoder | None in the current design |
+| Brake encoder | AS5600 on NEMA23/brake shaft through TCA9548A channel 1 |
 | Pi ↔ VCU transport | Native USB with micro-ROS Agent on Raspberry Pi |
 | Production VCU firmware | Proposed baseline: ESP-IDF + FreeRTOS; MicroPython remains for bench tests only |
 | LoRa E-stop | Production target is isolation from normal actuator control; remote transmitter MCU is still **TBD: Pico 2 or XIAO ESP32-C3** |
@@ -89,7 +89,7 @@ These are *shaft motion* estimates only; do **not** use them as calibrated front
 | AS5600 steering measurement | VCU | **200 Hz** | 100 Hz |
 | Steering closed-loop calculation | VCU | **200 Hz** | Target/actual 100 Hz |
 | Rear speed estimation | VCU | **200 Hz** | 100 Hz |
-| Brake command and supervision | VCU | **100 Hz proposed**; open-loop position command only while no feedback exists | Request/status only; feedback remains unavailable |
+| Brake command and supervision | VCU | **100 Hz control proposed**, AS5600 acquired at 200 Hz | Request, measured position and validity; calibration pending |
 | BLDC bounded traction loop | VCU | **100 Hz** | 100 Hz |
 | Driver critical fault handling | Independent hardware / VCU | Interrupt + supervision up to **1 kHz** | Immediate event + 10 Hz summary |
 | Supply measurement | VCU | **100 Hz** | 10 Hz |
@@ -123,7 +123,7 @@ These are *shaft motion* estimates only; do **not** use them as calibrated front
 | `steering_angle_rad` | float32, rad | Measured/calibrated road-wheel angle **only if linkage calibration supports it** |
 | `steering_target_rad` | float32, rad | Accepted target, not feedback |
 | `brake_request` | float32, 0…1 | Requested brake; not proof of applied force |
-| `brake_feedback` | float32 + validity | Set validity to **UNAVAILABLE**; no brake encoder is installed |
+| `brake_feedback` | float32 + validity | AS5600-derived brake travel after mounted released/applied calibration; invalid until proven |
 | `traction_request` | float32, 0…1 | Accepted traction request, not verified motor output |
 | `vcu_state` | enum | State machine below |
 | `validity_flags` | bitmask | Status per sensor/signal; missing feedback **INVALID** |
@@ -168,9 +168,9 @@ SELF_TEST
   ├─ Supply/brownout thresholds and output-state readback
   ├─ Independent E-stop / traction isolation feedback (if instrumented)
   ├─ Driver fault inputs + steering actuator wiring/limits
-  ├─ AS5600 communications, magnet health, absolute reading
+  ├─ Both AS5600 channels: communications, magnet health, absolute readings
   ├─ AS5047P interface, count acquisition, direction configuration
-  ├─ Brake command path, interlock and stopping readiness; report feedback unavailable
+  ├─ Brake command path, feedback direction/span, interlock and stopping readiness
   └─ Calibration version, units, integrity and sensor freshness
 SENSOR_INITIALIZATION
   ├─ Read steering angle; load zero and steering-linkage map
@@ -308,7 +308,7 @@ Test progression: electronics desk → bench actuators → wheels-off-ground →
 | Steering gears | **APPROVED WITH CONDITIONS** — latest correction 34T/34T, ratio 1:1 |
 | Steering AS5600 location and road-wheel calibration | **MORE DATA REQUIRED** — downstream measurement and sweep |
 | Front track conflicting values | **MORE DATA REQUIRED** — centre-to-centre measurement |
-| Brake feedback | **NOT INSTALLED** — no brake encoder in the current design |
+| Brake feedback | AS5600 selected; mounting, span calibration and stopping validation pending |
 | Independent stopping safety case | **REJECTED for autonomous release** until demonstrated |
 | LoRa E-stop transmitter | **OPEN DECISION** — Pico 2 versus XIAO ESP32-C3 |
 | LoRa E-stop isolation | **DESIGN AND TEST REQUIRED** — must not depend on normal VCU/ROS operation |
