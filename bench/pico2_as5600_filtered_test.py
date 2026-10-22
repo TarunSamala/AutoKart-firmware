@@ -20,9 +20,11 @@ from encoder_filters import AS5600AngleFilter
 I2C_ID = 0
 SDA_GPIO = 0
 SCL_GPIO = 1
-I2C_FREQUENCY = 400_000
+# 100 kHz is deliberately conservative for jumper-wire bench wiring.
+I2C_FREQUENCY = 100_000
 AS5600_ADDRESS = 0x36
 ZERO_FILE = "as5600_zero.txt"
+I2C_READ_RETRIES = 3
 
 SAMPLE_INTERVAL_MS = 5       # 200 Hz
 DISPLAY_INTERVAL_MS = 100    # 10 terminal updates per second
@@ -41,8 +43,25 @@ COUNTS_PER_REVOLUTION = 4096
 DEGREES_PER_COUNT = 360.0 / COUNTS_PER_REVOLUTION
 
 
+def read_register(register, length=1):
+    last_error = None
+    for attempt in range(I2C_READ_RETRIES):
+        try:
+            return i2c.readfrom_mem(AS5600_ADDRESS, register, length)
+        except OSError as error:
+            last_error = error
+            time.sleep_ms(10 * (attempt + 1))
+    raise OSError(
+        "AS5600 register 0x{:02X} read failed after {} attempts: {}".format(
+            register,
+            I2C_READ_RETRIES,
+            last_error,
+        )
+    )
+
+
 def read_u16(register):
-    data = i2c.readfrom_mem(AS5600_ADDRESS, register, 2)
+    data = read_register(register, 2)
     return (data[0] << 8) | data[1]
 
 
@@ -111,11 +130,11 @@ last_filtered = None
 def acquire_sample():
     global last_sensor, last_filtered
 
-    status = i2c.readfrom_mem(AS5600_ADDRESS, REG_STATUS, 1)[0]
+    status = read_register(REG_STATUS)[0]
     raw = read_u16(REG_RAW_ANGLE) & 0x0FFF
     sensor_angle = read_u16(REG_ANGLE) & 0x0FFF
     magnitude = read_u16(REG_MAGNITUDE) & 0x0FFF
-    agc = i2c.readfrom_mem(AS5600_ADDRESS, REG_AGC, 1)[0]
+    agc = read_register(REG_AGC)[0]
 
     result = angle_filter.update(
         sensor_angle,
@@ -168,7 +187,7 @@ def collect(duration_ms):
 
 
 def show_status():
-    print("SDA GP0/pin 1 | SCL GP1/pin 2 | address 0x36")
+    print("SDA GP0/pin 1 | SCL GP1/pin 2 | 100 kHz | address 0x36")
     print("I2C devices:", [hex(device) for device in i2c.scan()])
     print("Saved zero:", saved_zero if saved_zero is not None else "NONE")
     print("Filter: 200 Hz, median-of-three, 10 ms LPF, 1000 deg/s limit")
@@ -190,7 +209,7 @@ print()
 print("========================================")
 print(" PICO 2 + AS5600 FILTERED TEST")
 print("========================================")
-print("SDA GP0/pin 1 | SCL GP1/pin 2")
+print("SDA GP0/pin 1 | SCL GP1/pin 2 | I2C 100 kHz")
 
 devices = i2c.scan()
 print("I2C devices:", [hex(device) for device in devices])
@@ -199,8 +218,13 @@ if AS5600_ADDRESS not in devices:
         "AS5600 not detected at 0x36; check 3V3, GND, GP0/SDA, GP1/SCL"
     )
 
-collect(250)
-print_latest()
+try:
+    collect(250)
+    print_latest()
+except OSError as error:
+    print("INITIAL AS5600 READ ERROR:", error)
+    print("The sensor ACKed at 0x36 but a register read failed.")
+    print("Check 3V3/GND, shorten SDA/SCL wires, and add pull-ups if needed.")
 show_help()
 
 while True:
