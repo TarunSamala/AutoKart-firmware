@@ -65,7 +65,7 @@
 | Brake encoder | AS5600 on NEMA23/brake shaft through TCA9548A channel 1 |
 | Pi ↔ VCU transport | Native USB with micro-ROS Agent on Raspberry Pi |
 | Production VCU firmware | Proposed baseline: ESP-IDF + FreeRTOS; MicroPython remains for bench tests only |
-| LoRa E-stop | Production target is isolation from normal actuator control; remote transmitter MCU is still **TBD: Pico 2 or XIAO ESP32-C3** |
+| LoRa E-stop | Pico 2 + RA-02 + LAY37 transmitter selected; ESP32-S3 receiver uses GPIO47 as a stop-request output to an approved external interface |
 
 At 3200 pulses/rev and 1:1 shaft gearing, **motor pulses per shaft degree** = `3200/360 = 8.8889 pulses/°`:
 
@@ -258,11 +258,11 @@ Read gyro/accelerometer at proposed 200 Hz with monotonic timestamps, valid sens
 | Driver fault / task deadline miss | Hardware interrupt / bounded supervision | Inhibit unsafe output; fault/event log |
 | VCU reset/brownout | Hardware safe default | Traction disabled; no auto-rearm |
 | Physical E-stop asserted | Independent hardware | Independent isolation + proven stop behavior |
-| Brake feedback not available | **Current fixed condition** | Refuse AUTONOMOUS authorization until an approved alternative stopping safety case is demonstrated |
+| Brake feedback unavailable or stale | **Blocking fault** | The selected brake AS5600 must be mounted, calibrated and valid; otherwise refuse AUTONOMOUS authorization |
 
 At 10 km/h, `v = 2.78 m/s`; for a 100 ms command timeout, `d_timeout = v × t ≈ 0.278 m` **before** physical actuation and deceleration. This is not total stopping distance.
 
-**Critical blocking issue:** The current brake design has no encoder or other measured physical feedback. Reported NEMA23/TB6600 commands do not demonstrate brake force, actual movement, hold on power loss, or independent stopping capability. Until an approved and tested stopping safety case plus physical E-stop isolation are proven, vehicle autonomous release is **REJECTED**.
+**Critical blocking issue:** A brake AS5600 is selected but has not yet been mounted, calibrated or validated as proof of physical braking. Position alone also does not demonstrate brake force, actual wheel deceleration, hold on power loss or independent stopping capability. Until an approved and tested stopping safety case plus physical E-stop isolation are proven, vehicle autonomous release is **REJECTED**.
 
 ## 8. FMEA — minimum failure register
 
@@ -310,7 +310,7 @@ Test progression: electronics desk → bench actuators → wheels-off-ground →
 | Front track conflicting values | **MORE DATA REQUIRED** — centre-to-centre measurement |
 | Brake feedback | AS5600 selected; mounting, span calibration and stopping validation pending |
 | Independent stopping safety case | **REJECTED for autonomous release** until demonstrated |
-| LoRa E-stop transmitter | **OPEN DECISION** — Pico 2 versus XIAO ESP32-C3 |
+| LoRa E-stop transmitter | **SELECTED WITH VALIDATION PENDING** — Pico 2 + RA-02 + LAY37 |
 | LoRa E-stop isolation | **DESIGN AND TEST REQUIRED** — must not depend on normal VCU/ROS operation |
 | USB micro-ROS timings, reliability, recovery | **PROTOTYPE TEST REQUIRED** |
 | Raspberry Pi/VCU startup and command expiry | **PROTOTYPE TEST REQUIRED** |

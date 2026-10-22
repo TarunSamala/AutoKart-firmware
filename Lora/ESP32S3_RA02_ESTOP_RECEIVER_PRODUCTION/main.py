@@ -15,7 +15,7 @@ from packet_crc import verify_packet
 from watchdog import Watchdog
 from lora_driver import LoRa
 
-ESTOP_OUTPUT = Pin(15, Pin.OUT)   # connect to safety interface logic
+ESTOP_OUTPUT = Pin(47, Pin.OUT, value=1)  # boot in STOP-request state
 STATUS_LED = Pin(48, Pin.OUT)     # verify board LED
 
 TIMEOUT_MS = 300
