@@ -11,9 +11,10 @@ from machine import Pin, I2C
 # BENCH / WHEELS-OFF-GROUND TESTING ONLY
 #
 # GP8630N
-#   SDA = GPIO8
-#   SCL = GPIO9
+#   SDA = GPIO1
+#   SCL = GPIO2
 #   Address = 0x58
+#   Shared upstream I2C bus with PCA9548A when fitted
 #
 # PN2222A CONTROL
 #   GPIO13 -> BRK transistor
@@ -53,8 +54,8 @@ PASSWORD = "12345678"
 # GP8630N
 # ----------------------------
 
-SDA_PIN = 8
-SCL_PIN = 9
+SDA_PIN = 1
+SCL_PIN = 2
 
 GP_ADDR = 0x58
 
@@ -403,6 +404,7 @@ print("SSID:", SSID)
 print("Password:", PASSWORD)
 print("IP:", ap.ifconfig()[0])
 print("MAX SV:", MAX_VOLTAGE, "V")
+print("GP8630N I2C: SDA GPIO{} SCL GPIO{}".format(SDA_PIN, SCL_PIN))
 print("EN GPIO:", EN_PIN)
 print("BRK GPIO:", BRK_PIN)
 print("F/R GPIO:", FR_PIN)
