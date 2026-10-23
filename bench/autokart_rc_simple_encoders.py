@@ -1,7 +1,7 @@
 """AutoKart full Wi-Fi RC bench controller for ESP32-S3 MicroPython.
 
 Functions:
-  - game-style steering: hold left/right, release to hold position, center button
+  - spring-return steering: hold left/right for +/-25 deg, release to center
   - traction: forward=CCW, reverse=CW, controlled ramp and five voltage gears
   - momentary brake: press applies, release disengages while armed
   - arm releases stepper and BLD750 brakes; disarm applies both brakes
@@ -21,18 +21,23 @@ from machine import I2C, Pin, SPI
 
 SSID = "AutoKart-RC"
 PASSWORD = "12345678"
-WATCHDOG_MS = 1800
+# A short browser scheduling pause must not apply the mechanical brake. If the
+# UI disappears for this long, traction ramps to zero but the controller stays
+# armed. Explicit BRAKE / DISARM remain immediate safety actions.
+CONTROL_LINK_TIMEOUT_MS = 5000
 
-# Steering R86mini: tested scale is 2000 pulses for 45 degrees. RC travel is
-# limited to +/-35 degrees, therefore each side uses about 1556 pulses.
+# Steering driver: tested scale is 2000 pulses for 45 degrees. RC travel is
+# limited to +/-25 degrees, therefore each side uses about 1111 pulses.
 STEER_STEP_GPIO = 4
 STEER_DIR_GPIO = 5
-STEER_RIGHT_DIR = 1
-STEER_LIMIT_DEG = 35.0
+# The tested DM860/NPN interface is electrically inverted relative to the
+# earlier driver setup: GPIO LOW produces physical RIGHT rotation.
+STEER_RIGHT_DIR = 0
+STEER_LIMIT_DEG = 25.0
 STEER_PULSES_AT_45 = 2000
 STEER_PULSES_PER_DEG = STEER_PULSES_AT_45 / 45.0
-STEER_START_PPS = 180
-STEER_MAX_PPS = 700
+STEER_START_PPS = 250
+STEER_MAX_PPS = 1200
 STEER_HOLD_TIMEOUT_MS = 450
 STEER_ENCODER_RIGHT_SIGN = 1
 BRAKE_ENCODER_APPLY_SIGN = 1
@@ -225,6 +230,7 @@ brake_transition_count = 0
 steer_hold_direction = "STOP"
 last_steer_hold_ms = 0
 last_contact_ms = time.ticks_ms()
+link_timeout_active = False
 last_steering_encoder_ms = 0
 last_bldc_encoder_ms = 0
 
@@ -462,7 +468,7 @@ def write_voltage(voltage):
 
 
 def traction_stop():
-    global gear, target_voltage, drive_state, reversal_pending
+    global throttle_command, gear, target_voltage, drive_state, reversal_pending
     global direction_settle_started_ms
     gear = 0
     target_voltage = 0.0
@@ -479,8 +485,10 @@ def traction_stop():
 
 def request_soft_stop():
     global target_voltage, drive_state, reversal_pending
+    global direction_settle_started_ms
     target_voltage = 0.0
     reversal_pending = False
+    direction_settle_started_ms = None
     drive_state = "SLOWING" if throttle_command > 0.01 else "STOPPED"
 
 
@@ -626,7 +634,9 @@ def steer_hold(command):
     elif command == "RIGHT":
         steering.set_target(STEER_LIMIT_DEG)
     else:
-        steering.hold()
+        # Spring-return behavior: releasing either steering arrow always
+        # commands the calibrated center. This also handles STOP from the UI.
+        steering.set_target(0.0)
         steer_hold_direction = "STOP"
 
 
@@ -635,7 +645,9 @@ def update_steer_hold():
     if steer_hold_direction == "STOP":
         return
     if time.ticks_diff(time.ticks_ms(), last_steer_hold_ms) > STEER_HOLD_TIMEOUT_MS:
-        steering.hold()
+        # If pointer-up is lost because Wi-Fi/browser focus changes, fail back
+        # to center instead of leaving the steering latched at an angle.
+        steering.set_target(0.0)
         steer_hold_direction = "STOP"
 
 
@@ -670,7 +682,7 @@ HTML = r'''<!doctype html>
 </style></head><body><main class="app">
 <div class="top"><div class="brand"><h1>AutoKart RC</h1><small>Bench control · wheels raised</small></div><div id="armed" class="state">DISARMED</div></div>
 <section class="card"><div class="row"><button id="armBtn" class="green">ARM</button><button id="disarmBtn" class="red">DISARM</button></div><button id="zeroEncodersBtn" class="off">ZERO ENCODERS</button><div class="hint">Keep steering centered and BLDC stopped before zeroing</div></section>
-<section class="card"><div class="label">DRIVE + STEERING · HOLD ◀ / ▶ TO MOVE</div><div class="pad"><button id="forward" class="up green" aria-label="Drive forward" title="Drive forward">▲</button><button id="leftBtn" class="left blue" aria-label="Hold to steer left" title="Hold to steer left">◀</button><button id="centerBtn" class="center" aria-label="Center steering" title="Center steering">●</button><button id="rightBtn" class="right blue" aria-label="Hold to steer right" title="Hold to steer right">▶</button><button id="reverse" class="down" aria-label="Drive backward" title="Drive backward">▼</button></div><div class="hint">Drive arrows latch · steering arrows move only while held · center returns to 0°</div></section>
+<section class="card"><div class="label">DRIVE + STEERING · HOLD ◀ / ▶ FOR 25°</div><div class="pad"><button id="forward" class="up green" aria-label="Drive forward" title="Drive forward">▲</button><button id="leftBtn" class="left blue" aria-label="Hold for 25 degrees left" title="Hold for 25 degrees left">◀</button><button id="centerBtn" class="center" aria-label="Center steering" title="Center steering">●</button><button id="rightBtn" class="right blue" aria-label="Hold for 25 degrees right" title="Hold for 25 degrees right">▶</button><button id="reverse" class="down" aria-label="Drive backward" title="Drive backward">▼</button></div><div class="hint">Hold left/right to steer · release returns to 0° · center forces 0°</div></section>
 <section class="card"><div class="label">SPEED GEAR · SELECTED <b id="selectedGear">1</b></div><div class="row gears"><button data-gear="1">1</button><button data-gear="2">2</button><button data-gear="3">3</button><button data-gear="4">4</button><button data-gear="5">5</button></div><button id="offBtn" class="off">THROTTLE OFF</button></section>
 <section class="card"><button id="brakeBtn" class="red brake">HOLD TO BRAKE</button><div class="hint">Brake press stops traction immediately; release returns brake to 0° while armed</div></section>
 <section class="card"><div class="label">LIVE FEEDBACK</div><div class="telemetry"><div class="tile"><span>DRIVE</span><b id="driveState">STOPPED</b></div><div class="tile"><span>OUTPUT / TARGET</span><b><i id="voltage">0.00 V</i> / <i id="targetVoltage">0.00 V</i></b></div><div class="tile"><span>STEERING COMMAND</span><b><i id="steerNow">0.0°</i> → <i id="steerTarget">0.0°</i></b></div><div class="tile"><span>STEERING ENCODER</span><b><i id="steerDirection">CENTER</i> · <i id="steerPosition">0.0°</i></b></div><div class="tile"><span>BLDC / AXLE RPM</span><b><i id="bldcRpm">0</i> / <i id="axleRpm">0</i></b></div><div class="tile"><span>SPEED</span><b id="speed">0.00 km/h</b></div><div class="tile"><span>FULL MOTOR TURNS</span><b id="fullTurns">0</b></div><div class="tile"><span>MOTOR REVOLUTIONS</span><b id="motorRevs">0.00</b></div><div class="tile"><span>DISTANCE TRAVELLED</span><b id="distance">0.000 m</b></div><div class="tile"><span>SIGNED DISPLACEMENT</span><b id="displacement">0.000 m</b></div><div class="tile wide"><span>BRAKE ENCODER</span><b><i id="brakeState">APPLIED</i> · <i id="brakeAngle">45.0°</i> → <i id="brakeTarget">45.0°</i></b><div class="sensors">Magnet <b id="brakeMagnet" class="pass">OK</b> · validation <b id="brakeValidation">MOVING</b> · error <b id="brakeError">0.00°</b> · transition <b id="brakeTime">0 ms</b></div></div></div><div class="sensors">Encoder zero: <b id="encoderZeroState">INITIALIZING</b><br>Steering AS5600: <b id="steerDetail">checking</b> · errors <b id="steerErrors">0</b><br>BLDC AS5047P: <b id="bldcEnc">checking</b> · raw/errors <b id="bldcDetail">--</b><br>GP8630N: <b id="gpState">checking</b></div></section>
@@ -687,7 +699,7 @@ function steerStart(e,dir){e.preventDefault();const el=e.currentTarget;if(el.dis
 function steerStop(e){if(!steerHeld)return;if(e)e.preventDefault();clearInterval(steerTimer);steerTimer=null;const id=steerHeld==='LEFT'?'leftBtn':'rightBtn';$(id).classList.remove('pressed');steerHeld=null;send('/steer_hold?d=STOP')}
 function brakeDown(e){e.preventDefault();const b=$('brakeBtn');if(b.disabled||brakeHeld)return;if(e.pointerId!==undefined&&b.setPointerCapture)try{b.setPointerCapture(e.pointerId)}catch(_){}brakeHeld=true;b.classList.add('pressed');feedback();send('/brake?s=apply')}
 function brakeUp(e){if(!brakeHeld)return;if(e)e.preventDefault();brakeHeld=false;$('brakeBtn').classList.remove('pressed');send('/brake?s=release')}
-$('armBtn').onclick=e=>command('/arm',e.currentTarget);$('disarmBtn').onclick=e=>command('/disarm',e.currentTarget);$('zeroEncodersBtn').onclick=e=>command('/zero_encoders',e.currentTarget);$('emergencyBtn').onclick=e=>command('/disarm',e.currentTarget);$('forward').onclick=e=>drive('FORWARD',e.currentTarget);$('reverse').onclick=e=>drive('REVERSE',e.currentTarget);$('centerBtn').onclick=e=>command('/steer?v=0',e.currentTarget);$('offBtn').onclick=e=>gear(0,e.currentTarget);document.querySelectorAll('[data-gear]').forEach(b=>b.onclick=()=>gear(Number(b.dataset.gear),b));['leftBtn','rightBtn'].forEach(id=>{const b=$(id),dir=id==='leftBtn'?'LEFT':'RIGHT';b.addEventListener('pointerdown',e=>steerStart(e,dir));['pointerup','pointercancel','lostpointercapture'].forEach(x=>b.addEventListener(x,steerStop))});$('brakeBtn').addEventListener('pointerdown',brakeDown);['pointerup','pointercancel','lostpointercapture'].forEach(x=>$('brakeBtn').addEventListener(x,brakeUp));addEventListener('blur',()=>{steerStop();brakeUp()});addEventListener('pagehide',()=>navigator.sendBeacon('/disarm'));
+$('armBtn').onclick=e=>command('/arm',e.currentTarget);$('disarmBtn').onclick=e=>command('/disarm',e.currentTarget);$('zeroEncodersBtn').onclick=e=>command('/zero_encoders',e.currentTarget);$('emergencyBtn').onclick=e=>command('/disarm',e.currentTarget);$('forward').onclick=e=>drive('FORWARD',e.currentTarget);$('reverse').onclick=e=>drive('REVERSE',e.currentTarget);$('centerBtn').onclick=e=>command('/steer?v=0',e.currentTarget);$('offBtn').onclick=e=>gear(0,e.currentTarget);document.querySelectorAll('[data-gear]').forEach(b=>b.onclick=()=>gear(Number(b.dataset.gear),b));['leftBtn','rightBtn'].forEach(id=>{const b=$(id),dir=id==='leftBtn'?'LEFT':'RIGHT';b.addEventListener('pointerdown',e=>steerStart(e,dir));['pointerup','pointercancel','lostpointercapture'].forEach(x=>b.addEventListener(x,steerStop))});$('brakeBtn').addEventListener('pointerdown',brakeDown);['pointerup','pointercancel','lostpointercapture'].forEach(x=>$('brakeBtn').addEventListener(x,brakeUp));addEventListener('blur',()=>{steerStop();brakeUp()});addEventListener('pagehide',()=>navigator.sendBeacon('/soft_stop'));
 addEventListener('keydown',e=>{if(e.repeat)return;if(e.key==='ArrowLeft')steerStart({preventDefault(){},currentTarget:$('leftBtn'),pointerId:0},'LEFT');else if(e.key==='ArrowRight')steerStart({preventDefault(){},currentTarget:$('rightBtn'),pointerId:0},'RIGHT');else if(e.key==='ArrowUp')drive('FORWARD',$('forward'));else if(e.key==='ArrowDown')drive('REVERSE',$('reverse'));else if(e.code==='Space')brakeDown({preventDefault(){},pointerId:0})});addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight')steerStop();if(e.code==='Space')brakeUp()});
 async function update(){try{const r=await fetch('/status',{cache:'no-store'});if(!r.ok)throw Error();const s=await r.json();latest=s;const busy=s.brake_state==='APPLYING'||s.brake_state==='RELEASING';$('armed').textContent=s.armed?(busy?'ARMING':'ARMED'):'DISARMED';$('armed').classList.toggle('on',s.armed&&!busy);$('armed').classList.toggle('busy',busy);$('armBtn').disabled=s.armed;$('disarmBtn').disabled=!s.armed&&!busy;$('zeroEncodersBtn').disabled=s.armed||s.voltage>.01;const driveDisabled=!s.armed||s.brake_state!=='RELEASED'||!s.gp_online;$('forward').disabled=driveDisabled;$('reverse').disabled=driveDisabled;$('leftBtn').disabled=!s.armed;$('centerBtn').disabled=!s.armed;$('rightBtn').disabled=!s.armed;$('brakeBtn').disabled=!s.armed;$('brakeBtn').textContent=s.armed?'HOLD TO BRAKE':'BRAKE APPLIED';$('forward').classList.toggle('active',s.direction==='FORWARD'&&s.drive_state!=='STOPPED');$('reverse').classList.toggle('active',s.direction==='REVERSE'&&s.drive_state!=='STOPPED');$('leftBtn').classList.toggle('active',s.steer_hold==='LEFT');$('rightBtn').classList.toggle('active',s.steer_hold==='RIGHT');$('centerBtn').classList.toggle('active',Math.abs(s.steer_target)<=.5&&s.steer_hold==='STOP');document.querySelectorAll('[data-gear]').forEach(b=>b.classList.toggle('active',s.selected_gear===Number(b.dataset.gear)));$('selectedGear').textContent=s.selected_gear;$('voltage').textContent=s.voltage.toFixed(2)+' V';$('targetVoltage').textContent=s.target_voltage.toFixed(2)+' V';$('driveState').textContent=s.drive_state;$('steerNow').textContent=s.steer_command.toFixed(1)+'°';$('steerTarget').textContent=s.steer_target.toFixed(1)+'°';$('steerDirection').textContent=s.steer_direction;$('steerPosition').textContent=(s.steer_angle>0?'+':'')+s.steer_angle.toFixed(1)+'°';$('brakeState').textContent=s.brake_state;$('brakeAngle').textContent=s.brake_encoder_angle.toFixed(1)+'°';$('brakeTarget').textContent=s.brake_encoder_target.toFixed(1)+'°';$('brakeMagnet').textContent=s.brake_encoder_magnet;$('brakeValidation').textContent=s.brake_validation;$('brakeValidation').className=s.brake_validation==='PASS'?'pass':s.brake_validation==='FAIL'?'bad':'warn';$('brakeError').textContent=s.brake_error.toFixed(2)+'°';$('brakeTime').textContent=s.brake_transition_ms+' ms';$('bldcRpm').textContent=Math.abs(s.bldc_rpm).toFixed(0);$('axleRpm').textContent=Math.abs(s.axle_rpm).toFixed(0);$('speed').textContent=s.speed_kmh.toFixed(2)+' km/h';$('fullTurns').textContent=s.full_turns;$('motorRevs').textContent=s.motor_revolutions.toFixed(2);$('distance').textContent=s.distance_m.toFixed(3)+' m';$('displacement').textContent=s.displacement_m.toFixed(3)+' m';$('encoderZeroState').textContent=s.encoders_initialized?'READY':'WAITING FOR VALID MAGNETS';$('encoderZeroState').className=s.encoders_initialized?'pass':'warn';$('steerDetail').textContent=s.steer_online?s.steer_angle.toFixed(1)+'° '+s.steer_direction+' / '+s.steer_magnet:s.steer_magnet;$('steerErrors').textContent=s.steer_errors;$('bldcEnc').textContent=s.bldc_online?s.bldc_angle.toFixed(1)+'° / '+s.bldc_magnet:s.bldc_magnet;$('bldcDetail').textContent=s.bldc_raw+'/'+s.bldc_errors;$('gpState').textContent=s.gp_online?'ONLINE':'OFFLINE'}catch(e){note('CONTROLLER OFFLINE','bad')}}setInterval(update,200);update();
 </script></body></html>'''
@@ -802,8 +814,14 @@ try:
         update_traction()
         update_encoders()
 
-        if armed and time.ticks_diff(time.ticks_ms(), last_contact_ms) > WATCHDOG_MS:
-            disarm_controller("WEB WATCHDOG")
+        if (
+            armed and not link_timeout_active
+            and time.ticks_diff(time.ticks_ms(), last_contact_ms)
+            > CONTROL_LINK_TIMEOUT_MS
+        ):
+            request_soft_stop()
+            link_timeout_active = True
+            print("CONTROL LINK TIMEOUT: smooth traction stop requested")
 
         try:
             client, _ = server.accept()
@@ -816,16 +834,20 @@ try:
             first = request.split("\r\n", 1)[0].split(" ")
             path = first[1] if len(first) > 1 else "/bad"
 
+            # Any valid HTTP contact proves the controller page is reachable.
+            last_contact_ms = time.ticks_ms()
+            link_timeout_active = False
+
             if path == "/":
                 reply(client, HTML, content_type="text/html; charset=utf-8")
             elif path.startswith("/status"):
-                if armed:
-                    last_contact_ms = time.ticks_ms()
                 reply(client, json_status(), content_type="application/json; charset=utf-8")
             elif path.startswith("/arm"):
                 arm_controller()
-                last_contact_ms = time.ticks_ms()
                 reply(client, "ARMED; BRAKES RELEASING")
+            elif path.startswith("/soft_stop"):
+                request_soft_stop()
+                reply(client, "THROTTLE RAMPING TO ZERO")
             elif path.startswith("/disarm"):
                 disarm_controller("REMOTE")
                 reply(client, "DISARMED; BRAKES APPLYING")
