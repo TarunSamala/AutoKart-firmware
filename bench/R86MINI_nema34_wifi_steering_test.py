@@ -214,7 +214,7 @@ def update_sweep():
 
 
 HTML = """<!doctype html>
-<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AutoKart Steering</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#101216;color:#f5f7fa;font-family:Arial,sans-serif;text-align:center}
@@ -260,7 +260,7 @@ def query_text(path, key, default):
         return default
 
 
-def send_response(client, body, content_type="text/plain", status="200 OK"):
+def send_response(client, body, content_type="text/plain; charset=utf-8", status="200 OK"):
     if isinstance(body, str):
         body = body.encode()
 
@@ -332,7 +332,7 @@ try:
             path = parts[1]
 
             if path == "/":
-                send_response(client, HTML, "text/html")
+                send_response(client, HTML, "text/html; charset=utf-8")
 
             elif path.startswith("/left"):
                 if sweep_active:

@@ -419,7 +419,7 @@ print()
 HTML = """<!DOCTYPE html>
 <html>
 
-<head>
+<head><meta charset="utf-8">
 
 <meta
 name="viewport"
@@ -912,7 +912,7 @@ window.addEventListener(
 def send_response(
     client,
     body,
-    content_type="text/html",
+    content_type="text/html; charset=utf-8",
     status="200 OK"
 ):
 
@@ -1052,7 +1052,7 @@ try:
                 send_response(
                     client,
                     "SAFE",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 
@@ -1073,7 +1073,7 @@ try:
                 send_response(
                     client,
                     "EN RUN",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 
@@ -1097,7 +1097,7 @@ try:
                 send_response(
                     client,
                     "EN STOP",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 
@@ -1117,7 +1117,7 @@ try:
                     send_response(
                         client,
                         "BRAKE RELEASED",
-                        "text/plain"
+                        "text/plain; charset=utf-8"
                     )
 
                 else:
@@ -1125,7 +1125,7 @@ try:
                     send_response(
                         client,
                         "THROTTLE MUST BE ZERO",
-                        "text/plain",
+                        "text/plain; charset=utf-8",
                         "409 Conflict"
                     )
 
@@ -1153,7 +1153,7 @@ try:
                 send_response(
                     client,
                     "BRAKE APPLIED",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 
@@ -1178,7 +1178,7 @@ try:
                     send_response(
                         client,
                         "CW",
-                        "text/plain"
+                        "text/plain; charset=utf-8"
                     )
 
                 else:
@@ -1186,7 +1186,7 @@ try:
                     send_response(
                         client,
                         "STOP + BRAKE REQUIRED",
-                        "text/plain",
+                        "text/plain; charset=utf-8",
                         "409 Conflict"
                     )
 
@@ -1212,7 +1212,7 @@ try:
                     send_response(
                         client,
                         "CCW",
-                        "text/plain"
+                        "text/plain; charset=utf-8"
                     )
 
                 else:
@@ -1220,7 +1220,7 @@ try:
                     send_response(
                         client,
                         "STOP + BRAKE REQUIRED",
-                        "text/plain",
+                        "text/plain; charset=utf-8",
                         "409 Conflict"
                     )
 
@@ -1261,7 +1261,7 @@ try:
                     send_response(
                         client,
                         "OK",
-                        "text/plain"
+                        "text/plain; charset=utf-8"
                     )
 
 
@@ -1272,7 +1272,7 @@ try:
                     send_response(
                         client,
                         "EN + BRK INTERLOCK",
-                        "text/plain",
+                        "text/plain; charset=utf-8",
                         "409 Conflict"
                     )
 
@@ -1291,7 +1291,7 @@ try:
                 send_response(
                     client,
                     "OK",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 

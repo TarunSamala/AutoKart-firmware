@@ -664,7 +664,7 @@ apply_brakes()
 
 
 HTML = r'''<!doctype html>
-<html><head><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>AutoKart RC</title><style>
 :root{--bg:#070a10;--panel:#111a26;--panel2:#0b121c;--line:#26364c;--text:#f6f9ff;--muted:#8e9db2;--blue:#397dff;--cyan:#55d9ff;--green:#19b978;--red:#ed4054;--amber:#ffbd4a}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -15%,#1b2d48 0,var(--bg) 43%);color:var(--text);font-family:system-ui,sans-serif;touch-action:manipulation;overscroll-behavior:none;-webkit-user-select:none;user-select:none}.app{max-width:560px;margin:auto;padding:12px 12px calc(18px + env(safe-area-inset-bottom))}.top{display:flex;align-items:center;justify-content:space-between;gap:12px}.brand h1{font-size:25px;line-height:1;margin:8px 0 5px;letter-spacing:-.045em}.brand small{color:var(--muted)}.state{padding:9px 13px;border:1px solid #74323b;border-radius:999px;background:#39161c;color:#ff99a4;font-size:11px;font-weight:900;letter-spacing:.09em;white-space:nowrap}.state.on{border-color:#267052;background:#103a2a;color:#75e8b2}.state.busy{border-color:#8a6724;background:#3e3014;color:#ffd477}.card{background:linear-gradient(145deg,#151f2d,var(--panel));border:1px solid var(--line);border-radius:19px;padding:14px;margin-top:11px;box-shadow:0 12px 30px #0005}.label{color:var(--muted);font-size:10px;font-weight:900;letter-spacing:.16em;margin-bottom:10px}.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}button{position:relative;border:1px solid #ffffff14;border-radius:14px;min-height:54px;background:#2b394e;color:white;font-size:15px;font-weight:850;cursor:pointer;box-shadow:inset 0 1px #ffffff1a,0 5px 12px #0003;transition:transform .09s,filter .09s,box-shadow .16s;-webkit-tap-highlight-color:transparent}button:active,button.pressed{transform:scale(.95);filter:brightness(.82);box-shadow:inset 0 2px 8px #0005}button:focus-visible{outline:3px solid white;outline-offset:3px}button:disabled{opacity:.34;filter:saturate(.3);cursor:not-allowed;transform:none}.green{background:linear-gradient(145deg,#20c987,#10945f)}.blue{background:linear-gradient(145deg,#438dff,#2867dc)}.red{background:linear-gradient(145deg,#ff4b5f,#cc2c41)}.pad{display:grid;grid-template-columns:repeat(3,82px);grid-template-rows:repeat(3,72px);justify-content:center;gap:9px}.pad button{min-height:72px;border-radius:23px;font-size:29px}.pad .up{grid-column:2;grid-row:1}.pad .left{grid-column:1;grid-row:2}.pad .center{grid-column:2;grid-row:2;border-radius:50%;color:var(--cyan)}.pad .right{grid-column:3;grid-row:2}.pad .down{grid-column:2;grid-row:3}.pad .active{outline:3px solid var(--cyan);outline-offset:2px;box-shadow:0 0 24px #55d9ff55}.gears button{font-size:18px;border-radius:15px}.gears button.active{outline:3px solid var(--cyan);outline-offset:2px}.off,.brake,.stop{width:100%;margin-top:9px}.off{background:#202c3c}.brake{min-height:76px;font-size:20px}.stop{position:sticky;bottom:calc(8px + env(safe-area-inset-bottom));z-index:5;min-height:60px;font-size:17px;box-shadow:0 10px 30px #ed405455}.telemetry{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tile{background:var(--panel2);border:1px solid #213047;padding:10px;border-radius:12px}.tile span{display:block;color:var(--muted);font-size:9px;font-weight:750;letter-spacing:.09em;margin-bottom:4px}.tile b{font-size:13px}.wide{grid-column:1/-1}.pass{color:#73e6ae}.warn{color:#ffd477}.bad{color:#ff929d}.sensors{color:var(--muted);font-size:10px;line-height:1.8;margin-top:10px}.message{position:sticky;bottom:76px;z-index:4;text-align:center;background:#101925eF;border:1px solid var(--line);border-radius:11px;color:#ffd477;font-size:11px;padding:9px;min-height:35px;margin-top:10px;backdrop-filter:blur(8px)}.message.ok{color:#77e8b3}.message.bad{color:#ff929d}.hint{text-align:center;color:var(--muted);font-size:10px;margin-top:8px}@media(max-width:390px){.app{padding:8px 8px calc(14px + env(safe-area-inset-bottom))}.card{padding:12px}.pad{grid-template-columns:repeat(3,72px);grid-template-rows:repeat(3,65px)}.pad button{min-height:65px}.row{gap:5px}.gears button{font-size:16px}.brand h1{font-size:23px}}
 </style></head><body><main class="app">
@@ -709,7 +709,7 @@ def send_all(client, data):
         view = view[sent:]
 
 
-def reply(client, body, status="200 OK", content_type="text/plain"):
+def reply(client, body, status="200 OK", content_type="text/plain; charset=utf-8"):
     if isinstance(body, str):
         body = body.encode()
     header = (
@@ -817,11 +817,11 @@ try:
             path = first[1] if len(first) > 1 else "/bad"
 
             if path == "/":
-                reply(client, HTML, content_type="text/html")
+                reply(client, HTML, content_type="text/html; charset=utf-8")
             elif path.startswith("/status"):
                 if armed:
                     last_contact_ms = time.ticks_ms()
-                reply(client, json_status(), content_type="application/json")
+                reply(client, json_status(), content_type="application/json; charset=utf-8")
             elif path.startswith("/arm"):
                 arm_controller()
                 last_contact_ms = time.ticks_ms()

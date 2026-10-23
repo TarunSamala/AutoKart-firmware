@@ -261,7 +261,7 @@ set_direction("CW")
 
 
 HTML = """<!doctype html>
-<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>New AutoKart RC</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#101216;color:#f4f6f8;font-family:Arial,sans-serif;text-align:center}
@@ -315,7 +315,7 @@ def query_text(path, key, default=""):
         return default
 
 
-def send_response(client, body, content_type="text/plain", status="200 OK"):
+def send_response(client, body, content_type="text/plain; charset=utf-8", status="200 OK"):
     if isinstance(body, str):
         body = body.encode()
     header = (
@@ -392,7 +392,7 @@ try:
             path = parts[1]
 
             if path == "/":
-                send_response(client, HTML, "text/html")
+                send_response(client, HTML, "text/html; charset=utf-8")
 
             elif path.startswith("/arm"):
                 target_voltage = 0.0

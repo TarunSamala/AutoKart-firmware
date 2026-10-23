@@ -182,7 +182,7 @@ print()
 HTML = """<!DOCTYPE html>
 <html>
 
-<head>
+<head><meta charset="utf-8">
 
 <meta name="viewport"
 content="width=device-width, initial-scale=1">
@@ -399,7 +399,7 @@ window.addEventListener(
 # HTTP RESPONSE
 # ------------------------------------------------------------
 
-def send_response(client, body, content_type="text/html"):
+def send_response(client, body, content_type="text/html; charset=utf-8"):
 
     client.send(
         "HTTP/1.1 200 OK\r\n"
@@ -522,7 +522,7 @@ try:
                 send_response(
                     client,
                     "OK",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 
@@ -542,7 +542,7 @@ try:
                 send_response(
                     client,
                     "OK",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 
@@ -571,7 +571,7 @@ try:
                 send_response(
                     client,
                     "OK",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 
@@ -586,7 +586,7 @@ try:
                 send_response(
                     client,
                     "OK",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 

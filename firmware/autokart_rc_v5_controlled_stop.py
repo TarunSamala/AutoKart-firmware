@@ -515,7 +515,7 @@ print("================================")
 HTML = r"""
 <!DOCTYPE html>
 <html>
-<head>
+<head><meta charset="utf-8">
 <meta name="viewport"
       content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 
@@ -1390,7 +1390,7 @@ def send_all(sock, data):
         data = data[sent:]
 
 
-def response(client, body, content_type="text/plain"):
+def response(client, body, content_type="text/plain; charset=utf-8"):
     header = (
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: " + content_type + "\r\n"
@@ -1580,7 +1580,7 @@ try:
                     response(
                         client,
                         HTML,
-                        "text/html"
+                        "text/html; charset=utf-8"
                     )
 
                 # --------------------------------------------

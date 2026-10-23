@@ -169,7 +169,7 @@ def request_value(request, marker):
         return None
 
 
-def response(client, body, status="200 OK", content_type="text/plain"):
+def response(client, body, status="200 OK", content_type="text/plain; charset=utf-8"):
     data = body.encode()
     header = (
         "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\n"
@@ -291,7 +291,7 @@ try:
             elif "GET /heartbeat" in request:
                 pass
             else:
-                response(client, HTML, content_type="text/html")
+                response(client, HTML, content_type="text/html; charset=utf-8")
             client.close()
         except OSError:
             pass

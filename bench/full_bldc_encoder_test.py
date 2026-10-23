@@ -343,7 +343,7 @@ update_diagnostics()
 update_encoder()
 
 
-HTML = r'''<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><title>BLD750 Encoder Test</title><style>
+HTML = r'''<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><title>BLD750 Encoder Test</title><style>
 :root{--bg:#080c12;--card:#131c28;--line:#29384d;--text:#f5f8ff;--muted:#93a2b7;--green:#18b978;--red:#e94255;--blue:#397dff;--orange:#ef8d31}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -10%,#203451,var(--bg) 42%);color:var(--text);font-family:system-ui,sans-serif}.app{max-width:620px;margin:auto;padding:14px}.top{display:flex;justify-content:space-between;align-items:center;gap:10px}.top h1{font-size:24px;margin:8px 0}.badge{padding:8px 12px;border-radius:999px;background:#441821;color:#ff9aa5;font-size:11px;font-weight:900}.badge.on{background:#123d2c;color:#78e9b5}.card{background:linear-gradient(145deg,#172231,var(--card));border:1px solid var(--line);border-radius:18px;padding:14px;margin-top:11px}.label{color:var(--muted);font-size:10px;font-weight:900;letter-spacing:.14em;margin-bottom:9px}.voltage{text-align:center;font-size:44px;font-weight:900}.voltage small{font-size:16px;color:var(--muted)}input{width:100%;accent-color:var(--blue)}.row{display:flex;gap:8px}.row>*{flex:1}button{min-height:52px;border:0;border-radius:13px;color:white;background:#2b394d;font-size:15px;font-weight:850;box-shadow:inset 0 1px #ffffff22}button:active{transform:scale(.97)}button:disabled{opacity:.35}.green{background:var(--green)}.red{background:var(--red)}.blue{background:var(--blue)}.orange{background:var(--orange)}.stop{width:100%;min-height:66px;font-size:19px;margin-top:10px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tile{background:#0c131d;border:1px solid #253449;border-radius:12px;padding:10px}.tile span{display:block;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.08em}.tile b{font-size:16px}.wide{grid-column:1/-1}.ok{color:#73e6ae}.bad{color:#ff929d}.msg{text-align:center;color:#ffd078;min-height:25px;margin-top:10px;font-size:12px}.warning{text-align:center;color:#ff929d;font-size:11px;font-weight:800;margin:14px}@media(max-width:390px){.app{padding:8px}.card{padding:11px}.top h1{font-size:21px}}
 </style></head><body><main class="app"><div class="top"><h1>BLD750 Encoder Test</h1><div id="runState" class="badge">SAFE</div></div>
 <section class="card"><div class="label">SV TARGET</div><div class="voltage"><span id="targetV">0.00</span> <small>V</small></div><input id="slider" type="range" min="0" max="500" value="0" step="1"><div class="row"><button id="runBtn" class="green">RUN</button><button id="stopBtn" class="red">STOP + BRAKE</button></div></section>
@@ -364,7 +364,7 @@ def send_all(client, data):
         view = view[sent:]
 
 
-def reply(client, body, status="200 OK", content_type="text/plain"):
+def reply(client, body, status="200 OK", content_type="text/plain; charset=utf-8"):
     if isinstance(body, str):
         body = body.encode()
     header = (
@@ -450,9 +450,9 @@ try:
             path = first[1] if len(first) > 1 else "/bad"
 
             if path == "/":
-                reply(client, HTML, content_type="text/html")
+                reply(client, HTML, content_type="text/html; charset=utf-8")
             elif path.startswith("/status"):
-                reply(client, json_status(), content_type="application/json")
+                reply(client, json_status(), content_type="application/json; charset=utf-8")
             elif path.startswith("/heartbeat"):
                 last_command_ms = time.ticks_ms()
                 reply(client, "OK")

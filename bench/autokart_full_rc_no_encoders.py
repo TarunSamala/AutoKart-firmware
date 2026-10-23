@@ -254,7 +254,7 @@ write_voltage(0.0)
 apply_brake()
 
 
-HTML = r"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>AutoKart RC</title><style>
+HTML = r"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AutoKart RC</title><style>
 :root{--bg:#090c12;--card:#151b25;--line:#2a3548;--text:#f4f7fb;--muted:#a4afc1;--blue:#2684ff;--green:#18ad66;--red:#e93849}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui;touch-action:manipulation}.wrap{max-width:760px;margin:auto;padding:12px}.head{display:flex;justify-content:space-between;align-items:center;gap:10px}.state{padding:8px 12px;border-radius:20px;background:#47191f;color:#ff8c96;font-weight:800;white-space:nowrap}.state.on{background:#12422e;color:#75edb3}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px;min-width:0}.wide{grid-column:1/-1}.label{font-size:12px;color:var(--muted);font-weight:800;letter-spacing:.1em}.value{font-size:38px;font-weight:850;margin:7px 0}.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px}.row>*{flex:1 1 120px;min-width:0}button{min-height:48px;border:0;border-radius:11px;background:#39465c;color:white;font-size:15px;font-weight:800;cursor:pointer;touch-action:manipulation}button:active{transform:scale(.98)}button:disabled{opacity:.55;cursor:wait}button:focus-visible,input:focus-visible{outline:3px solid #6aabff;outline-offset:2px}.blue{background:var(--blue)}.green{background:var(--green)}.red{background:var(--red)}input{width:100%;padding:11px;border-radius:9px;border:1px solid var(--line);background:#0d121a;color:white;font-size:16px;min-height:46px}input[type=range]{padding:0;min-height:52px;accent-color:var(--blue)}.small{color:var(--muted);font-size:13px}.message{position:sticky;bottom:8px;min-height:42px;margin-top:12px;padding:11px;border:1px solid var(--line);border-radius:11px;background:#111925;color:var(--muted);font-size:13px;z-index:2}.message.ok{background:#103a29;color:#75edb3}.message.error{background:#47191f;color:#ff969f}.stop{width:100%;margin-top:12px;min-height:64px;background:var(--red);font-size:20px}@media(max-width:600px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.wrap{padding:9px}.card{padding:13px}.head h1{font-size:25px;margin-bottom:5px}.row>*{flex-basis:calc(50% - 8px)}.row input{flex-basis:100%}}
 </style></head><body><main class="wrap"><div class="head"><div><h1>AutoKart RC</h1><div class="small">No encoders · open-loop bench test</div></div><div id="state" class="state">DISARMED</div></div><section class="grid">
 <div class="card wide"><div class="label">STEERING</div><div class="value"><span id="angle">0.0</span>&deg;</div><div class="small">Commanded estimate only · target <span id="target">0.0</span>&deg;</div><div class="row"><button onclick="limit(30)">&plusmn;30&deg;</button><button onclick="limit(60)">&plusmn;60&deg;</button></div><div class="row"><button class="blue" onclick="steer(-steeringLimit)">LEFT</button><button onclick="steer(0)">CENTER</button><button class="blue" onclick="steer(steeringLimit)">RIGHT</button></div><div class="row"><input id="custom" type="number" min="-60" max="60" value="0"><button onclick="steer(ui.custom.value)">GO TO ANGLE</button></div><div class="row"><button onclick="command('/hold')">HOLD</button><button onclick="calibrate()">CALIBRATE CENTER</button></div><div class="small" style="margin-top:12px">R86mini pulse configuration — apply only while disarmed and centered</div><div class="row"><input id="ppr" type="number" min="400" max="51200" value="3200" title="Pulses per revolution"><input id="startPps" type="number" min="20" max="1000" value="100" title="Start pulses per second"><input id="maxPps" type="number" min="20" max="3000" value="350" title="Maximum pulses per second"></div><div class="small">PPR · Start PPS · Maximum PPS</div><button style="width:100%;margin-top:9px" onclick="steerSettings()">APPLY STEERING PULSE SETTINGS</button></div>
@@ -301,7 +301,7 @@ def send_all(client, data):
         view = view[sent:]
 
 
-def reply(client, body, status="200 OK", content_type="text/plain"):
+def reply(client, body, status="200 OK", content_type="text/plain; charset=utf-8"):
     if isinstance(body, str):
         body = body.encode()
     header = (
@@ -351,7 +351,7 @@ try:
             path = first[1] if len(first) > 1 else "/bad"
 
             if path == "/":
-                reply(client, HTML, content_type="text/html")
+                reply(client, HTML, content_type="text/html; charset=utf-8")
             elif path.startswith("/status"):
                 if armed:
                     last_contact_ms = time.ticks_ms()

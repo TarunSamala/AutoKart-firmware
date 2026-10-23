@@ -763,7 +763,7 @@ def send_all(sock, data):
         view = view[sent:]
 
 
-def response(client, body, content_type="text/plain", status="200 OK"):
+def response(client, body, content_type="text/plain; charset=utf-8", status="200 OK"):
     if isinstance(body, str):
         body = body.encode()
     header = (
@@ -845,7 +845,7 @@ try:
             path = parts[1]
 
             if path == "/":
-                response(client, HTML, "text/html")
+                response(client, HTML, "text/html; charset=utf-8")
 
             elif path.startswith("/health"):
                 response(client, health_report())
