@@ -19,6 +19,10 @@ RA-02 receiver wiring on the ESP32-S3 terminal adapter:
 | RESET | GPIO8 |
 | DIO0 | GPIO17 |
 
+Stop-request output: GPIO47 to an approved transistor/opto safety-interface
+input. Never connect GPIO47 directly to a contactor or relay coil. GPIO15 is
+reserved exclusively for the BLD-750 F/R control.
+
 These pins avoid the BLDC control pins GPIO13, GPIO14, and GPIO15.
 
 Receiver states:
@@ -30,5 +34,6 @@ TIMEOUT
 Safety rule:
 No valid communication = STOP.
 
-The GPIO output must connect to the independent safety chain,
-not directly replace hardware emergency stop.
+The GPIO output is only a stop request. It must connect through an approved
+interface and does not by itself constitute an independent hardware emergency
+stop or traction-power cut.

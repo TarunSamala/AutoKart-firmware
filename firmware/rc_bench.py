@@ -676,7 +676,7 @@ HTML = """
 
 <html>
 
-<head>
+<head><meta charset="utf-8">
 
 <meta
 name="viewport"
@@ -2184,7 +2184,7 @@ def send_all(
 def response(
     client,
     body,
-    content_type="text/plain"
+    content_type="text/plain; charset=utf-8"
 ):
 
     header = (
@@ -2439,7 +2439,7 @@ try:
 
                         HTML,
 
-                        "text/html"
+                        "text/html; charset=utf-8"
                     )
 
 

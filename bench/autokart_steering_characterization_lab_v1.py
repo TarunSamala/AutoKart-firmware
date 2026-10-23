@@ -687,7 +687,7 @@ def observation_html():
 
 
 def page():
-    html = """<!doctype html><html><head>
+    html = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AutoKart Steering Lab</title>{style}</head>
 <body><header><b>AutoKart Steering Characterization Lab</b>
@@ -887,7 +887,7 @@ def send_file(client,filename,download_name):
 
     header = (
         "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/csv\r\n"
+        "Content-Type: text/csv; charset=utf-8\r\n"
         "Content-Disposition: attachment; filename={}\r\n"
         "Content-Length: {}\r\n"
         "Connection: close\r\n\r\n"
@@ -923,7 +923,7 @@ def serve():
             line = req.decode("utf-8","ignore").split("\r\n",1)[0]
             parts = line.split(" ")
             if len(parts) < 2:
-                send(c,"Bad request","400 Bad Request","text/plain")
+                send(c,"Bad request","400 Bad Request","text/plain; charset=utf-8")
                 continue
 
             target = parts[1]
@@ -989,7 +989,7 @@ def serve():
                 send(c,b"","204 No Content","image/x-icon")
 
             else:
-                send(c,"Not found","404 Not Found","text/plain")
+                send(c,"Not found","404 Not Found","text/plain; charset=utf-8")
 
         except KeyboardInterrupt:
             STEP.value(STEP_INACTIVE)
@@ -1001,7 +1001,7 @@ def serve():
             try:
                 if c:
                     send(c,"Internal error: {}".format(e),
-                         "500 Internal Server Error","text/plain")
+                         "500 Internal Server Error","text/plain; charset=utf-8")
             except Exception:
                 pass
 

@@ -34,9 +34,10 @@ and add local 100 nF and 10–100 µF decoupling if the radio resets during TX.
 ## Test file
 
 `bench/pico2_ra02_estop_test.py` reads the RA-02 SX1278 register `0x42` and
-prints the LAY37 state. For the live fail-stop heartbeat, use
-`bench/pico2_ra02_estop_transmitter.py`. It sends `ESTOP,0,sequence` while
-the NC contact is healthy and `ESTOP,1,sequence` when pressed or open.
+prints the LAY37 state. The selected production transmitter is
+`Lora/PICO2_RA02_ESTOP_PRODUCTION/main.py`: it sends the actual state at
+startup and transitions, and repeats `ESTOP,1,sequence` while STOP remains
+active. It deliberately does not send a continuous healthy-state heartbeat.
 
 Expected output includes:
 

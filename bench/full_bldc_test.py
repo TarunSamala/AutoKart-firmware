@@ -11,10 +11,10 @@ from machine import Pin, I2C
 # BENCH / WHEELS-OFF-GROUND TESTING ONLY
 #
 # GP8630N
-#   SDA = GPIO1
-#   SCL = GPIO2
+#   SDA = GPIO7, I2C(1)
+#   SCL = GPIO21, I2C(1)
 #   Address = 0x58
-#   Shared upstream I2C bus with PCA9548A when fitted
+#   Dedicated bus; do not join to PCA9548A GPIO1/GPIO2
 #
 # PN2222A CONTROL
 #   GPIO13 -> BRK transistor
@@ -54,8 +54,8 @@ PASSWORD = "12345678"
 # GP8630N
 # ----------------------------
 
-SDA_PIN = 1
-SCL_PIN = 2
+SDA_PIN = 7
+SCL_PIN = 21
 
 GP_ADDR = 0x58
 
@@ -236,7 +236,7 @@ direction_cw()
 # ============================================================
 
 i2c = I2C(
-    0,
+    1,
     sda=Pin(SDA_PIN),
     scl=Pin(SCL_PIN),
     freq=100000
@@ -419,7 +419,7 @@ print()
 HTML = """<!DOCTYPE html>
 <html>
 
-<head>
+<head><meta charset="utf-8">
 
 <meta
 name="viewport"
@@ -912,7 +912,7 @@ window.addEventListener(
 def send_response(
     client,
     body,
-    content_type="text/html",
+    content_type="text/html; charset=utf-8",
     status="200 OK"
 ):
 
@@ -1052,7 +1052,7 @@ try:
                 send_response(
                     client,
                     "SAFE",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 
@@ -1073,7 +1073,7 @@ try:
                 send_response(
                     client,
                     "EN RUN",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 
@@ -1097,7 +1097,7 @@ try:
                 send_response(
                     client,
                     "EN STOP",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 
@@ -1117,7 +1117,7 @@ try:
                     send_response(
                         client,
                         "BRAKE RELEASED",
-                        "text/plain"
+                        "text/plain; charset=utf-8"
                     )
 
                 else:
@@ -1125,7 +1125,7 @@ try:
                     send_response(
                         client,
                         "THROTTLE MUST BE ZERO",
-                        "text/plain",
+                        "text/plain; charset=utf-8",
                         "409 Conflict"
                     )
 
@@ -1153,7 +1153,7 @@ try:
                 send_response(
                     client,
                     "BRAKE APPLIED",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 
@@ -1178,7 +1178,7 @@ try:
                     send_response(
                         client,
                         "CW",
-                        "text/plain"
+                        "text/plain; charset=utf-8"
                     )
 
                 else:
@@ -1186,7 +1186,7 @@ try:
                     send_response(
                         client,
                         "STOP + BRAKE REQUIRED",
-                        "text/plain",
+                        "text/plain; charset=utf-8",
                         "409 Conflict"
                     )
 
@@ -1212,7 +1212,7 @@ try:
                     send_response(
                         client,
                         "CCW",
-                        "text/plain"
+                        "text/plain; charset=utf-8"
                     )
 
                 else:
@@ -1220,7 +1220,7 @@ try:
                     send_response(
                         client,
                         "STOP + BRAKE REQUIRED",
-                        "text/plain",
+                        "text/plain; charset=utf-8",
                         "409 Conflict"
                     )
 
@@ -1261,7 +1261,7 @@ try:
                     send_response(
                         client,
                         "OK",
-                        "text/plain"
+                        "text/plain; charset=utf-8"
                     )
 
 
@@ -1272,7 +1272,7 @@ try:
                     send_response(
                         client,
                         "EN + BRK INTERLOCK",
-                        "text/plain",
+                        "text/plain; charset=utf-8",
                         "409 Conflict"
                     )
 
@@ -1291,7 +1291,7 @@ try:
                 send_response(
                     client,
                     "OK",
-                    "text/plain"
+                    "text/plain; charset=utf-8"
                 )
 
 
