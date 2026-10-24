@@ -3,8 +3,8 @@
 Temporary test wiring:
   AS5600 VCC -> ESP32-S3 3V3
   AS5600 GND -> ESP32-S3 GND
-  AS5600 SDA -> ESP32-S3 GPIO8
-  AS5600 SCL -> ESP32-S3 GPIO9
+  AS5600 SDA -> ESP32-S3 GPIO1
+  AS5600 SCL -> ESP32-S3 GPIO2
 
 The AS5600 uses I2C address 0x36. No calibration registers are written.
 """
@@ -13,8 +13,8 @@ from machine import Pin, I2C
 import time
 
 
-SDA_PIN = 8
-SCL_PIN = 9
+SDA_PIN = 1
+SCL_PIN = 2
 I2C_FREQ = 100000
 AS5600_ADDR = 0x36
 
@@ -67,4 +67,3 @@ while True:
         )
     )
     time.sleep_ms(100)
-

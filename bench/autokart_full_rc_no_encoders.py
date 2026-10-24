@@ -3,7 +3,7 @@
 ESP32-S3 hardware:
   Steering R86mini: STEP GPIO4, DIR GPIO5
   Brake TB6600: STEP GPIO38, DIR GPIO39, ENA GPIO40
-  GP8630N: SDA GPIO1, SCL GPIO2, address 0x58
+  GP8630N: SDA GPIO7, SCL GPIO21, address 0x58
   BLD750 transistor stages: BRK GPIO13, EN GPIO14, F/R GPIO15
 
 Steering and brake positions are open-loop estimates. Before boot, place the
@@ -41,8 +41,8 @@ BRAKE_PULSES_PER_REV = 3200
 BRAKE_PULSES_PER_DEG = BRAKE_PULSES_PER_REV / 360.0
 BRAKE_APPLY_DEG = 30.0
 
-SDA_GPIO = 1
-SCL_GPIO = 2
+SDA_GPIO = 7
+SCL_GPIO = 21
 GP_ADDR = 0x58
 GP_MODE_REG = 0x01
 GP_DAC_REG = 0x02

@@ -1,7 +1,8 @@
 """AutoKart ESP32-S3 genuine sensor and DAC validation.
 
 Devices:
-  - PCA9548A (0x70) + steering AS5600 (channel 0, 0x36)
+  - steering AS5600 directly on I2C(0), GPIO1/GPIO2
+  - brake AS5600 directly on SoftI2C, GPIO35/GPIO36
   - Meukron AS5047P BLDC sprocket encoder over SPI
   - DFRobot GP8630N DAC (0x58)
 
@@ -11,14 +12,16 @@ OUT wire is disconnected from BLD-750 SV and uses a multimeter for genuine
 analog-output verification.
 """
 
-from machine import I2C, Pin, SPI
+from machine import I2C, Pin, SoftI2C, SPI
 import math
 import time
 
 
-# Frozen ESP32-S3 pinout: encoder mux and DAC use separate I2C buses.
-PCA_I2C_SDA = 1
-PCA_I2C_SCL = 2
+# Direct encoder buses plus the separate DAC bus.
+STEERING_I2C_SDA = 1
+STEERING_I2C_SCL = 2
+BRAKE_I2C_SDA = 35
+BRAKE_I2C_SCL = 36
 GP_I2C_SDA = 7
 GP_I2C_SCL = 21
 
@@ -31,8 +34,6 @@ BLD_BRK = 13
 BLD_EN = 14
 BLD_FR = 15
 
-PCA_ADDRESS = 0x70
-PCA_STEERING_CHANNEL = 0
 AS5600_ADDRESS = 0x36
 GP8630N_ADDRESS = 0x58
 
@@ -86,8 +87,16 @@ bld_en = Pin(BLD_EN, Pin.OUT, value=0)     # EN open/high -> STOP
 bld_brk = Pin(BLD_BRK, Pin.OUT, value=0)  # BRK open/high -> APPLIED
 bld_fr = Pin(BLD_FR, Pin.OUT, value=0)     # direction only; motor stopped
 
-pca_i2c = I2C(
-    0, sda=Pin(PCA_I2C_SDA), scl=Pin(PCA_I2C_SCL), freq=100_000
+steering_i2c = I2C(
+    0,
+    sda=Pin(STEERING_I2C_SDA),
+    scl=Pin(STEERING_I2C_SCL),
+    freq=100_000,
+)
+brake_i2c = SoftI2C(
+    sda=Pin(BRAKE_I2C_SDA),
+    scl=Pin(BRAKE_I2C_SCL),
+    freq=100_000,
 )
 gp_i2c = I2C(
     1, sda=Pin(GP_I2C_SDA), scl=Pin(GP_I2C_SCL), freq=100_000
@@ -117,25 +126,15 @@ def median(values):
     return ordered[len(ordered) // 2]
 
 
-def pca_select(channel):
-    if channel < 0 or channel > 7:
-        raise ValueError("PCA9548A channel must be 0..7")
-    pca_i2c.writeto(PCA_ADDRESS, bytes((1 << channel,)))
-
-
-def pca_disable_all():
-    pca_i2c.writeto(PCA_ADDRESS, b"\x00")
-
-
 def i2c_addresses(bus):
     return [hex(address) for address in bus.scan()]
 
 
-def i2c_read_retry(address, register, length, attempts=3):
+def i2c_read_retry(bus, address, register, length, attempts=3):
     last_error = None
     for attempt in range(attempts):
         try:
-            return pca_i2c.readfrom_mem(address, register, length)
+            return bus.readfrom_mem(address, register, length)
         except OSError as error:
             last_error = error
             time.sleep_ms(5 * (attempt + 1))
@@ -146,8 +145,8 @@ def i2c_read_retry(address, register, length, attempts=3):
     )
 
 
-def i2c_u16(address, register):
-    data = i2c_read_retry(address, register, 2)
+def i2c_u16(bus, address, register):
+    data = i2c_read_retry(bus, address, register, 2)
     return (data[0] << 8) | data[1]
 
 
@@ -161,12 +160,13 @@ def as5600_magnet_state(status):
     return "NO MAGNET"
 
 
-def as5600_read():
-    pca_select(PCA_STEERING_CHANNEL)
-    status = i2c_read_retry(AS5600_ADDRESS, AS5600_STATUS, 1)[0]
-    raw = i2c_u16(AS5600_ADDRESS, AS5600_RAW_ANGLE) & 0x0FFF
-    agc = i2c_read_retry(AS5600_ADDRESS, AS5600_AGC, 1)[0]
-    magnitude = i2c_u16(AS5600_ADDRESS, AS5600_MAGNITUDE) & 0x0FFF
+def as5600_read(bus):
+    status = i2c_read_retry(bus, AS5600_ADDRESS, AS5600_STATUS, 1)[0]
+    raw = i2c_u16(bus, AS5600_ADDRESS, AS5600_RAW_ANGLE) & 0x0FFF
+    agc = i2c_read_retry(bus, AS5600_ADDRESS, AS5600_AGC, 1)[0]
+    magnitude = i2c_u16(
+        bus, AS5600_ADDRESS, AS5600_MAGNITUDE
+    ) & 0x0FFF
     state = as5600_magnet_state(status)
     return {
         "raw": raw,
@@ -377,21 +377,19 @@ def safe_dac_zero():
 def bus_check():
     print("\nI2C BUS CHECK")
     try:
-        pca_disable_all()
-        pca_bus = i2c_addresses(pca_i2c)
+        steering_bus = i2c_addresses(steering_i2c)
+        brake_bus = i2c_addresses(brake_i2c)
         gp_bus = i2c_addresses(gp_i2c)
-        print("  PCA I2C(0) SDA1/SCL2:", pca_bus)
+        print("  Steering I2C(0) SDA1/SCL2:", steering_bus)
+        print("  Brake SoftI2C SDA35/SCL36:", brake_bus)
         print("  GP I2C(1) SDA7/SCL21:", gp_bus)
-        pca_ok = hex(PCA_ADDRESS) in pca_bus
+        steering_ok = hex(AS5600_ADDRESS) in steering_bus
+        brake_ok = hex(AS5600_ADDRESS) in brake_bus
         gp_ok = hex(GP8630N_ADDRESS) in gp_bus
-        pca_select(PCA_STEERING_CHANNEL)
-        channel = i2c_addresses(pca_i2c)
-        print("  PCA channel 0:", channel)
-        as5600_ok = hex(AS5600_ADDRESS) in channel
-        print("  PCA9548A:", "PASS" if pca_ok else "FAIL")
         print("  GP8630N:", "PASS" if gp_ok else "FAIL")
-        print("  Steering AS5600:", "PASS" if as5600_ok else "FAIL")
-        return pca_ok and gp_ok and as5600_ok
+        print("  Steering AS5600:", "PASS" if steering_ok else "FAIL")
+        print("  Brake AS5600:", "PASS" if brake_ok else "FAIL")
+        return gp_ok and steering_ok and brake_ok
     except Exception as error:
         print("  I2C CHECK FAIL:", error)
         return False
@@ -400,7 +398,7 @@ def bus_check():
 def snapshot():
     print("\nLIVE SENSOR SNAPSHOT")
     try:
-        steering = as5600_read()
+        steering = as5600_read(steering_i2c)
         angle = (
             steering_filter.update(steering["raw"])
             if steering["magnet_ok"] else None
@@ -414,7 +412,19 @@ def snapshot():
             )
         )
     except Exception as error:
-        print("  AS5600 READ FAIL:", error)
+        print("  STEERING AS5600 READ FAIL:", error)
+
+    try:
+        brake = as5600_read(brake_i2c)
+        print(
+            "  Brake AS5600 raw {:4d} abs {:8.3f} deg | {} | "
+            "MAG {} AGC {}".format(
+                brake["raw"], brake["absolute_deg"], brake["magnet"],
+                brake["magnitude"], brake["agc"]
+            )
+        )
+    except Exception as error:
+        print("  BRAKE AS5600 READ FAIL:", error)
 
     try:
         encoder = as5047_read()
@@ -446,7 +456,7 @@ def steering_validation():
     started = time.ticks_ms()
     while time.ticks_diff(time.ticks_ms(), started) < 600:
         try:
-            sample = as5600_read()
+            sample = as5600_read(steering_i2c)
             if sample["magnet_ok"]:
                 steering_filter.update(sample["raw"])
                 valid += 1
@@ -469,7 +479,7 @@ def steering_validation():
     try:
         while True:
             try:
-                sample = as5600_read()
+                sample = as5600_read(steering_i2c)
                 if not sample["magnet_ok"]:
                     errors += 1
                     angle = None
@@ -646,9 +656,10 @@ def run_all_tests():
 
 def show_status():
     print("\nFINAL PINOUT")
-    print("  PCA I2C(0): SDA GPIO1, SCL GPIO2")
+    print("  Steering AS5600 I2C(0): SDA GPIO1, SCL GPIO2")
+    print("  Brake AS5600 SoftI2C: SDA GPIO35, SCL GPIO36")
     print("  GP8630N I2C(1): SDA GPIO7, SCL GPIO21")
-    print("  PCA9548A 0x70 -> channel 0 -> steering AS5600 0x36")
+    print("  PCA9548A: not used")
     print("  GP8630N 0x58, OUT disconnected from BLD during voltage test")
     print("  AS5047P: CS16 SCK18 MOSI41 MISO42, SPI mode 1")
     print("  BLD safety: EN14 STOP, BRK13 APPLIED; F/R15 defaults to CW")
@@ -662,7 +673,7 @@ def show_status():
 def show_help():
     print("Commands:")
     print("  all       - guided genuine validation of every listed device")
-    print("  bus       - verify PCA9548A, GP8630N and AS5600 bus routing")
+    print("  bus       - verify both AS5600 buses and GP8630N routing")
     print("  read      - live readings from both encoders")
     print("  steering  - genuine 0/-35/+35 steering movement validation")
     print("  bldc      - genuine AS5047P movement, one-turn and drivetrain test")

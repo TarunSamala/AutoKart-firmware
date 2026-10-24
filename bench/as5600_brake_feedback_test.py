@@ -7,8 +7,8 @@ be measured safely before closed-loop control is added.
 Wiring:
   AS5600 VCC -> ESP32-S3 3V3
   AS5600 GND -> ESP32-S3 GND
-  AS5600 SDA -> ESP32-S3 GPIO8
-  AS5600 SCL -> ESP32-S3 GPIO9
+  AS5600 SDA -> ESP32-S3 GPIO35
+  AS5600 SCL -> ESP32-S3 GPIO36
 
 Commands after startup:
   r       read one sample
@@ -30,12 +30,12 @@ The reported brake percentage is feedback only. It is not yet connected to
 the TB6600 brake controller or the BLDC safety logic.
 """
 
-from machine import Pin, I2C
+from machine import Pin, SoftI2C
 import time
 
 
-SDA_PIN = 8
-SCL_PIN = 9
+SDA_PIN = 35
+SCL_PIN = 36
 I2C_FREQ = 100000
 AS5600_ADDR = 0x36
 CAL_FILE = "as5600_brake_cal.txt"
@@ -195,7 +195,7 @@ def print_help():
 
 print("\nESP32-S3 AS5600 BRAKE FEEDBACK TEST")
 print("I2C SDA GPIO{}  SCL GPIO{}  address 0x{:02X}".format(SDA_PIN, SCL_PIN, AS5600_ADDR))
-i2c = I2C(0, sda=Pin(SDA_PIN), scl=Pin(SCL_PIN), freq=I2C_FREQ)
+i2c = SoftI2C(sda=Pin(SDA_PIN), scl=Pin(SCL_PIN), freq=I2C_FREQ)
 devices = i2c.scan()
 print("I2C devices:", [hex(device) for device in devices])
 if AS5600_ADDR not in devices:

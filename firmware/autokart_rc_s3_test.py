@@ -3,7 +3,7 @@
 Controls:
   - R86mini + NEMA34 open-loop steering on GPIO4/GPIO5
   - TB6600 + brake stepper on GPIO38/GPIO39/GPIO40
-  - GP8630N throttle command on I2C GPIO1/GPIO2, limited to 3.0 V
+  - GP8630N throttle command on I2C GPIO7/GPIO21, limited to 3.0 V
   - BLD750 BRK/EN/F-R through the tested transistor stages on GPIO13/14/15
 
 The steering UI defaults to +/-30 degrees and has an explicit +/-60-degree
@@ -18,14 +18,15 @@ Before every boot:
 Final integrated pin allocation:
   Steering R86mini: STEP GPIO4, DIR GPIO5 (ENA disconnected/optional)
   Brake TB6600:     STEP GPIO38, DIR GPIO39, ENA GPIO40
-  GP8630N:          SDA GPIO1, SCL GPIO2, address 0x58
+  Steering AS5600:  SDA GPIO1, SCL GPIO2, address 0x36
+  GP8630N:          SDA GPIO7, SCL GPIO21, address 0x58
   BLD750 stages:    BRK GPIO13, EN GPIO14, F/R GPIO15
 """
 
 import network
 import socket
 import time
-from machine import I2C, Pin, SPI, time_pulse_us
+from machine import I2C, Pin, SPI
 
 
 FIRMWARE_NAME = "AutoKart-RC-S3-Test"
@@ -71,9 +72,11 @@ BRAKE_START_PERIOD_US = 1800
 BRAKE_FAST_PERIOD_US = 900
 BRAKE_ACCEL_US_PER_STEP = 10
 
-# GP8630N DAC on the final shared I2C bus.
-SDA_GPIO = 1
-SCL_GPIO = 2
+# Direct steering-encoder bus and separate GP8630N DAC bus.
+STEERING_SDA_GPIO = 1
+STEERING_SCL_GPIO = 2
+SDA_GPIO = 7
+SCL_GPIO = 21
 GP_ADDR = 0x58
 REG_MODE = 0x01
 REG_DAC = 0x02
@@ -90,19 +93,20 @@ BLD_FR_GPIO = 15
 
 # Automatic health-check inputs. Driver STEP/DIR connections have no return
 # signal, so those entries remain UNVERIFIED unless dedicated fault/readback
-# wiring is added. AS5600 shares the GP8630N I2C bus.
+# wiring is added. AS5600 uses its own I2C(0) bus.
 AS5600_ADDR = 0x36
 AS5600_STATUS_REG = 0x0B
 AS5600_MAGNET_DETECTED = 0x20
-AS5047_PWM_GPIO = 7
-AS5047_PWM_TIMEOUT_US = 2500
 AS5047_SPI_SCK = 18
 AS5047_SPI_MOSI = 41
 AS5047_SPI_MISO = 42
 AS5047_SPI_CS = 16
-AS5047_SETTINGS1 = 0x0018
-AS5047_PWM_ENABLE_MASK = 0x0080
-AS5047_UVW_ABI_MASK = 0x0008
+AS5047_DIAAGC = 0x3FFC
+AS5047_ANGLECOM = 0x3FFF
+AS5047_MAGL = 1 << 11
+AS5047_MAGH = 1 << 10
+AS5047_COF = 1 << 9
+AS5047_LF = 1 << 8
 RA02_SPI_SCK = 12
 RA02_SPI_MOSI = 11
 RA02_SPI_MISO = 10
@@ -312,9 +316,15 @@ def set_bld_direction(requested):
 
 
 i2c = I2C(
-    0,
+    1,
     sda=Pin(SDA_GPIO),
     scl=Pin(SCL_GPIO),
+    freq=100000,
+)
+steering_i2c = I2C(
+    0,
+    sda=Pin(STEERING_SDA_GPIO),
+    scl=Pin(STEERING_SCL_GPIO),
     freq=100000,
 )
 
@@ -344,7 +354,6 @@ ra02_spi = SPI(
 ra02_cs = Pin(RA02_CS_GPIO, Pin.OUT, value=1)
 ra02_reset = Pin(RA02_RESET_GPIO, Pin.OUT, value=1)
 ra02_dio0 = Pin(RA02_DIO0_GPIO, Pin.IN)
-as5047_pwm = Pin(AS5047_PWM_GPIO, Pin.IN)
 as5047_cs = Pin(AS5047_SPI_CS, Pin.OUT, value=1)
 as5047_spi = SPI(
     1,
@@ -376,7 +385,9 @@ def probe_ra02():
 
 def probe_as5600():
     try:
-        status = i2c.readfrom_mem(AS5600_ADDR, AS5600_STATUS_REG, 1)[0]
+        status = steering_i2c.readfrom_mem(
+            AS5600_ADDR, AS5600_STATUS_REG, 1
+        )[0]
         return True, bool(status & AS5600_MAGNET_DETECTED)
     except Exception:
         return False, False
@@ -407,50 +418,23 @@ def as5047_read_register(register):
     return as5047_transfer(0) & 0x3FFF
 
 
-def as5047_write_register(register, value):
-    as5047_cs.value(0)
-    as5047_spi.write(as5047_frame(as5047_even_parity(register)))
-    as5047_cs.value(1)
-    time.sleep_us(2)
-    as5047_cs.value(0)
-    as5047_spi.write(as5047_frame(as5047_even_parity(value)))
-    as5047_cs.value(1)
-    time.sleep_us(2)
-
-
-def configure_as5047_pwm():
+def probe_as5047_spi():
     try:
-        settings = as5047_read_register(AS5047_SETTINGS1)
-        target = (
-            settings | AS5047_PWM_ENABLE_MASK
-        ) & ~AS5047_UVW_ABI_MASK
-        as5047_write_register(AS5047_SETTINGS1, target)
-        verified = as5047_read_register(AS5047_SETTINGS1)
-        return (
-            bool(verified & AS5047_PWM_ENABLE_MASK)
-            and not bool(verified & AS5047_UVW_ABI_MASK)
+        raw = as5047_read_register(AS5047_ANGLECOM)
+        diagnostic = as5047_read_register(AS5047_DIAAGC)
+        magnet_ok = (
+            bool(diagnostic & AS5047_LF)
+            and not bool(diagnostic & (AS5047_MAGL | AS5047_MAGH | AS5047_COF))
         )
+        return True, magnet_ok, raw
     except Exception:
-        return False
-
-
-def probe_as5047_pwm():
-    try:
-        pulse = time_pulse_us(
-            as5047_pwm,
-            1,
-            AS5047_PWM_TIMEOUT_US,
-        )
-        return pulse if 5 <= pulse <= 2000 else None
-    except Exception:
-        return None
+        return False, False, None
 
 
 ra02_connected = probe_ra02()
-as5047_configured = configure_as5047_pwm()
+as5047_connected, as5047_magnet_ok, as5047_raw = probe_as5047_spi()
 as5600_connected = False
 as5600_magnet_ok = False
-as5047_pwm_us = None
 last_health_update_ms = time.ticks_ms() - HEALTH_UPDATE_MS
 last_pi_heartbeat_ms = None
 pi_camera_connected = False
@@ -584,7 +568,7 @@ def update_hardware_health(force=False):
     global last_health_update_ms
     global gp8630n_connected, ra02_connected
     global as5600_connected, as5600_magnet_ok
-    global as5047_configured, as5047_pwm_us
+    global as5047_connected, as5047_magnet_ok, as5047_raw
 
     now = time.ticks_ms()
     if not force and time.ticks_diff(now, last_health_update_ms) < HEALTH_UPDATE_MS:
@@ -596,9 +580,7 @@ def update_hardware_health(force=False):
     except Exception:
         gp8630n_connected = False
     as5600_connected, as5600_magnet_ok = probe_as5600()
-    if not as5047_configured:
-        as5047_configured = configure_as5047_pwm()
-    as5047_pwm_us = probe_as5047_pwm()
+    as5047_connected, as5047_magnet_ok, as5047_raw = probe_as5047_spi()
     ra02_connected = probe_ra02()
 
 
@@ -620,13 +602,13 @@ def health_report():
     )
     throttle_encoder_state = (
         "CONNECTED"
-        if as5047_configured and as5047_pwm_us is not None
+        if as5047_connected and as5047_magnet_ok
         else "MISSING"
     )
     throttle_encoder_note = (
-        "AS5047P PWM {} us".format(as5047_pwm_us)
-        if as5047_pwm_us is not None
-        else "No valid AS5047P PWM pulse on GPIO7"
+        "AS5047P SPI raw {} magnet OK".format(as5047_raw)
+        if as5047_connected and as5047_magnet_ok
+        else "AS5047P SPI missing or magnet invalid"
     )
     pi_fresh = age_is_fresh(last_pi_heartbeat_ms, PI_HEARTBEAT_TIMEOUT_MS)
     camera_state = "CONNECTED" if pi_fresh and pi_camera_connected else "MISSING"
@@ -804,7 +786,7 @@ print("Open     : http://" + ip_address)
 print("Steering : STEP4 DIR5, default +/-30, optional +/-60")
 print("Brake    : STEP38 DIR39 ENA40, apply", BRAKE_APPLY_DEG, "deg")
 print(
-    "Throttle : GP8630N SDA1 SCL2, hard maximum",
+    "Throttle : GP8630N SDA7 SCL21, hard maximum",
     THROTTLE_ABSOLUTE_MAX_V,
     "V",
 )

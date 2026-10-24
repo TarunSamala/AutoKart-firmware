@@ -1,13 +1,15 @@
 """ESP32-S3 full BLD750 + GP8630N + AS5047P Wi-Fi bench test.
 
 The UI uses the AutoKart RC controls: ARM/DISARM, Forward/Reverse, gears 1-5,
-Throttle Off and Emergency Stop. Normal starts, gear changes, direction changes
-and link-loss stops use a voltage ramp. Direction reversal reaches 0 V, turns
-EN off, waits, changes F/R, then enables and ramps in the new direction.
+Throttle Off, Wheel Lock and Emergency Stop. Normal starts, gear changes,
+direction changes and link-loss stops use a voltage ramp. Direction reversal
+reaches 0 V, turns EN off, waits, changes F/R, then enables and ramps in the
+new direction.
 
-Emergency Stop, explicit Disarm, an actuator interlock and program failure are
-deliberately immediate. AS5047P faults remain visible in telemetry but do not
-randomly stop this isolated BLDC bench test.
+Wheel Lock, Emergency Stop, explicit Disarm, an actuator interlock and program
+failure are deliberately immediate: DAC=0 V, EN=STOP and BRK=APPLIED. The lock
+remains asserted until ARM is explicitly requested. AS5047P faults remain
+visible in telemetry but do not randomly stop this isolated BLDC bench test.
 
 WHEELS-OFF-GROUND TESTING ONLY. The BLD750 control inputs are driven through
 the existing PN2222 open-collector stages; never wire them directly to ESP32.
@@ -103,6 +105,7 @@ fr_pin = Pin(BLD_FR_GPIO, Pin.OUT, value=1)      # transistor ON -> CCW
 armed = False
 running = False
 brake_released = False
+wheel_locked = True
 direction = "FORWARD"
 requested_direction = "FORWARD"
 selected_gear = 1
@@ -328,21 +331,27 @@ def zero_encoder():
     )
 
 
-def safe_stop(reason):
+def lock_wheel(reason="WHEEL LOCK"):
     global armed, target_voltage, gear, reversal_pending, drive_state
-    global direction_settle_started_ms
+    global direction_settle_started_ms, wheel_locked
     armed = False
+    wheel_locked = True
     target_voltage = 0.0
     gear = 0
     reversal_pending = False
     direction_settle_started_ms = None
-    drive_state = "DISARMED"
+    drive_state = "WHEEL LOCKED"
     try:
         write_voltage(0.0)
     except Exception:
         pass
     apply_brake()
     enable_stop()
+    print("WHEEL LOCKED:", reason, "| SV=0 V | EN=STOP | BRK=APPLIED")
+
+
+def safe_stop(reason):
+    lock_wheel(reason)
     print("SAFE STOP:", reason)
 
 
@@ -352,6 +361,9 @@ def request_soft_stop(reason="SOFT STOP"):
     target_voltage = 0.0
     reversal_pending = False
     direction_settle_started_ms = None
+    if wheel_locked:
+        drive_state = "WHEEL LOCKED"
+        return
     drive_state = "SLOWING" if current_voltage > 0.01 else "STOPPED"
     print(reason + ": ramping SV to zero")
 
@@ -374,12 +386,13 @@ def request_drive(new_direction):
 
 
 def arm_controller():
-    global armed, drive_state
+    global armed, drive_state, wheel_locked
     if armed:
         return
     write_voltage(0.0)
     enable_stop()
     release_brake()
+    wheel_locked = False
     armed = True
     drive_state = "ARMED AT 0 V"
     print("ARMED AT 0 V")
@@ -444,14 +457,14 @@ update_encoder()
 HTML = r'''<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><title>BLD750 Encoder Test</title><style>
 :root{--bg:#080c12;--card:#131c28;--line:#29384d;--text:#f5f8ff;--muted:#93a2b7;--green:#18b978;--red:#e94255;--blue:#397dff;--orange:#ef8d31}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -10%,#203451,var(--bg) 42%);color:var(--text);font-family:system-ui,sans-serif;touch-action:manipulation}.app{max-width:620px;margin:auto;padding:14px}.top{display:flex;justify-content:space-between;align-items:center;gap:10px}.top h1{font-size:24px;margin:8px 0}.badge{padding:8px 12px;border-radius:999px;background:#441821;color:#ff9aa5;font-size:11px;font-weight:900}.badge.on{background:#123d2c;color:#78e9b5}.card{background:linear-gradient(145deg,#172231,var(--card));border:1px solid var(--line);border-radius:18px;padding:14px;margin-top:11px}.label{color:var(--muted);font-size:10px;font-weight:900;letter-spacing:.14em;margin-bottom:9px}.voltage{text-align:center;font-size:44px;font-weight:900}.voltage small{font-size:16px;color:var(--muted)}.row{display:flex;gap:8px}.row>*{flex:1}.gears{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}button{min-height:52px;border:0;border-radius:13px;color:white;background:#2b394d;font-size:15px;font-weight:850;box-shadow:inset 0 1px #ffffff22;transition:transform .09s,filter .09s}button:active,button.active{transform:scale(.96);filter:brightness(.85)}button.active{outline:3px solid #55d9ff;outline-offset:2px}button:disabled{opacity:.35}.green{background:var(--green)}.red{background:var(--red)}.blue{background:var(--blue)}.orange{background:var(--orange)}.wide{width:100%;margin-top:9px}.stop{width:100%;min-height:66px;font-size:19px;margin-top:10px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tile{background:#0c131d;border:1px solid #253449;border-radius:12px;padding:10px}.tile span{display:block;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.08em}.tile b{font-size:16px}.wideTile{grid-column:1/-1}.ok{color:#73e6ae}.bad{color:#ff929d}.msg{text-align:center;color:#ffd078;min-height:25px;margin-top:10px;font-size:12px}.warning{text-align:center;color:#ff929d;font-size:11px;font-weight:800;margin:14px}@media(max-width:390px){.app{padding:8px}.card{padding:11px}.top h1{font-size:21px}}
 </style></head><body><main class="app"><div class="top"><h1>BLD750 Smooth Test</h1><div id="runState" class="badge">DISARMED</div></div>
-<section class="card"><div class="row"><button id="armBtn" class="green">ARM</button><button id="disarmBtn" class="red">DISARM</button></div></section>
+<section class="card"><div class="row"><button id="armBtn" class="green">ARM + UNLOCK</button><button id="disarmBtn" class="red">DISARM</button></div><button id="lockBtn" class="red wide">🔒 LOCK WHEEL</button><div style="color:var(--muted);font-size:10px;text-align:center;margin-top:8px">Lock forces SV to 0 V, EN to STOP and BLD750 BRK to APPLIED. ARM releases the lock.</div></section>
 <section class="card"><div class="label">DIRECTION</div><div class="row"><button id="forwardBtn" class="blue">▲ FORWARD</button><button id="reverseBtn" class="orange">▼ REVERSE</button></div><div style="color:var(--muted);font-size:10px;text-align:center;margin-top:8px">Direction changes ramp to 0 V, pause, switch F/R, then ramp up.</div></section>
 <section class="card"><div class="label">SPEED GEAR</div><div class="gears"><button data-gear="1">1</button><button data-gear="2">2</button><button data-gear="3">3</button><button data-gear="4">4</button><button data-gear="5">5</button></div><button id="offBtn" class="wide">THROTTLE OFF · SMOOTH STOP</button><div class="voltage"><span id="targetV">0.00</span> <small>V target</small></div></section>
 <section class="card"><button id="zeroBtn" class="wide">ZERO ENCODER + DISTANCE</button></section>
-<section class="card"><div class="label">LIVE AS5047P FEEDBACK</div><div class="grid"><div class="tile"><span>DRIVE</span><b id="driveState">STOPPED</b></div><div class="tile"><span>OUTPUT / TARGET</span><b><i id="actualV">0.00 V</i> / <i id="commandV">0.00 V</i></b></div><div class="tile"><span>MOTOR RPM</span><b id="motorRpm">0</b></div><div class="tile"><span>AXLE RPM</span><b id="axleRpm">0</b></div><div class="tile"><span>FULL MOTOR TURNS</span><b id="turns">0</b></div><div class="tile"><span>MOTOR REVOLUTIONS</span><b id="revs">0.000</b></div><div class="tile"><span>NOMINAL SPEED</span><b id="speed">0.00 km/h</b></div><div class="tile"><span>DISTANCE TRAVELLED</span><b id="distance">0.000 m</b></div><div class="tile"><span>SIGNED DISPLACEMENT</span><b id="displacement">0.000 m</b></div><div class="tile"><span>ANGLE FROM ZERO</span><b id="angle">0.0°</b></div><div class="tile wideTile"><span>ENCODER HEALTH</span><b id="health">CHECKING</b><div id="detail" style="color:var(--muted);font-size:10px;margin-top:5px">--</div></div></div></section>
+<section class="card"><div class="label">LIVE AS5047P FEEDBACK</div><div class="grid"><div class="tile"><span>DRIVE</span><b id="driveState">WHEEL LOCKED</b></div><div class="tile"><span>BLDC BRAKE LOCK</span><b id="lockState" class="bad">LOCKED</b></div><div class="tile"><span>OUTPUT / TARGET</span><b><i id="actualV">0.00 V</i> / <i id="commandV">0.00 V</i></b></div><div class="tile"><span>MOTOR RPM</span><b id="motorRpm">0</b></div><div class="tile"><span>AXLE RPM</span><b id="axleRpm">0</b></div><div class="tile"><span>FULL MOTOR TURNS</span><b id="turns">0</b></div><div class="tile"><span>MOTOR REVOLUTIONS</span><b id="revs">0.000</b></div><div class="tile"><span>NOMINAL SPEED</span><b id="speed">0.00 km/h</b></div><div class="tile"><span>DISTANCE TRAVELLED</span><b id="distance">0.000 m</b></div><div class="tile"><span>SIGNED DISPLACEMENT</span><b id="displacement">0.000 m</b></div><div class="tile"><span>ANGLE FROM ZERO</span><b id="angle">0.0°</b></div><div class="tile wideTile"><span>ENCODER HEALTH</span><b id="health">CHECKING</b><div id="detail" style="color:var(--muted);font-size:10px;margin-top:5px">--</div></div></div></section>
 <button id="safeBtn" class="red stop">EMERGENCY STOP + BRAKE</button><div id="message" class="msg">Connecting…</div><div class="warning">BENCH TEST ONLY · DRIVE WHEELS MUST BE RAISED AND GUARDED</div></main><script>
-const $=x=>document.getElementById(x);function msg(t,b=false){$('message').textContent=t;$('message').className='msg '+(b?'bad':'')}async function cmd(p,quiet=false){try{const r=await fetch(p,{cache:'no-store'}),t=await r.text();if(!quiet)msg(t,!r.ok);return r.ok}catch(e){if(!quiet)msg('CONTROLLER OFFLINE',true);return false}}$('armBtn').onclick=()=>cmd('/arm');$('disarmBtn').onclick=()=>cmd('/disarm');$('forwardBtn').onclick=()=>cmd('/drive?d=FORWARD');$('reverseBtn').onclick=()=>cmd('/drive?d=REVERSE');$('offBtn').onclick=()=>cmd('/gear?n=0');$('safeBtn').onclick=()=>cmd('/disarm');$('zeroBtn').onclick=()=>cmd('/zero');document.querySelectorAll('[data-gear]').forEach(b=>b.onclick=()=>cmd('/gear?n='+b.dataset.gear));
-async function status(){try{const r=await fetch('/status',{cache:'no-store'}),s=await r.json();$('runState').textContent=s.armed?'ARMED':'DISARMED';$('runState').classList.toggle('on',s.armed);$('targetV').textContent=s.target_voltage.toFixed(2);$('actualV').textContent=s.voltage.toFixed(2)+' V';$('commandV').textContent=s.target_voltage.toFixed(2)+' V';$('driveState').textContent=s.drive_state;$('motorRpm').textContent=Math.abs(s.rpm).toFixed(0);$('axleRpm').textContent=Math.abs(s.axle_rpm).toFixed(0);$('turns').textContent=s.full_turns;$('revs').textContent=s.motor_revs.toFixed(3);$('speed').textContent=s.speed_kmh.toFixed(2)+' km/h';$('distance').textContent=s.distance_m.toFixed(3)+' m';$('displacement').textContent=s.displacement_m.toFixed(3)+' m';$('angle').textContent=s.relative_deg.toFixed(1)+'°';$('health').textContent=s.encoder_ready?'MAGNET OK':'CHECK: '+s.magnet;$('health').className=s.encoder_ready?'ok':'bad';$('detail').textContent='raw '+s.raw+' · errors '+s.errors+' · AGC '+s.agc+' · MAG '+s.magnitude;$('armBtn').disabled=s.armed;$('disarmBtn').disabled=!s.armed;$('forwardBtn').disabled=!s.armed;$('reverseBtn').disabled=!s.armed;$('zeroBtn').disabled=s.armed||s.voltage>.01;$('forwardBtn').classList.toggle('active',s.direction==='FORWARD'&&s.target_voltage>0);$('reverseBtn').classList.toggle('active',s.direction==='REVERSE'&&s.target_voltage>0);document.querySelectorAll('[data-gear]').forEach(b=>b.classList.toggle('active',Number(b.dataset.gear)===s.selected_gear))}catch(e){msg('CONTROLLER OFFLINE',true)}}setInterval(status,250);addEventListener('pagehide',()=>navigator.sendBeacon('/soft_stop'));status();
+const $=x=>document.getElementById(x);function msg(t,b=false){$('message').textContent=t;$('message').className='msg '+(b?'bad':'')}async function cmd(p,quiet=false){try{const r=await fetch(p,{cache:'no-store'}),t=await r.text();if(!quiet)msg(t,!r.ok);return r.ok}catch(e){if(!quiet)msg('CONTROLLER OFFLINE',true);return false}}$('armBtn').onclick=()=>cmd('/arm');$('disarmBtn').onclick=()=>cmd('/disarm');$('lockBtn').onclick=()=>cmd('/lock');$('forwardBtn').onclick=()=>cmd('/drive?d=FORWARD');$('reverseBtn').onclick=()=>cmd('/drive?d=REVERSE');$('offBtn').onclick=()=>cmd('/gear?n=0');$('safeBtn').onclick=()=>cmd('/lock');$('zeroBtn').onclick=()=>cmd('/zero');document.querySelectorAll('[data-gear]').forEach(b=>b.onclick=()=>cmd('/gear?n='+b.dataset.gear));
+async function status(){try{const r=await fetch('/status',{cache:'no-store'}),s=await r.json();$('runState').textContent=s.wheel_locked?'WHEEL LOCKED':s.armed?'ARMED':'DISARMED';$('runState').classList.toggle('on',s.armed&&!s.wheel_locked);$('targetV').textContent=s.target_voltage.toFixed(2);$('actualV').textContent=s.voltage.toFixed(2)+' V';$('commandV').textContent=s.target_voltage.toFixed(2)+' V';$('driveState').textContent=s.drive_state;$('lockState').textContent=s.wheel_locked?'LOCKED':'RELEASED';$('lockState').className=s.wheel_locked?'bad':'ok';$('motorRpm').textContent=Math.abs(s.rpm).toFixed(0);$('axleRpm').textContent=Math.abs(s.axle_rpm).toFixed(0);$('turns').textContent=s.full_turns;$('revs').textContent=s.motor_revs.toFixed(3);$('speed').textContent=s.speed_kmh.toFixed(2)+' km/h';$('distance').textContent=s.distance_m.toFixed(3)+' m';$('displacement').textContent=s.displacement_m.toFixed(3)+' m';$('angle').textContent=s.relative_deg.toFixed(1)+'°';$('health').textContent=s.encoder_ready?'MAGNET OK':'CHECK: '+s.magnet;$('health').className=s.encoder_ready?'ok':'bad';$('detail').textContent='raw '+s.raw+' · errors '+s.errors+' · AGC '+s.agc+' · MAG '+s.magnitude;$('armBtn').disabled=s.armed&&!s.wheel_locked;$('disarmBtn').disabled=s.wheel_locked;$('lockBtn').disabled=s.wheel_locked;$('forwardBtn').disabled=!s.armed||s.wheel_locked;$('reverseBtn').disabled=!s.armed||s.wheel_locked;$('zeroBtn').disabled=s.armed||s.voltage>.01;$('forwardBtn').classList.toggle('active',s.direction==='FORWARD'&&s.target_voltage>0);$('reverseBtn').classList.toggle('active',s.direction==='REVERSE'&&s.target_voltage>0);document.querySelectorAll('[data-gear]').forEach(b=>b.classList.toggle('active',Number(b.dataset.gear)===s.selected_gear))}catch(e){msg('CONTROLLER OFFLINE',true)}}setInterval(status,250);addEventListener('pagehide',()=>navigator.sendBeacon('/soft_stop'));status();
 </script></body></html>'''
 
 
@@ -485,7 +498,7 @@ def query(path, key, default):
 
 def json_status():
     return (
-        '{{"armed":{},"running":{},"brake_released":{},'
+        '{{"armed":{},"running":{},"brake_released":{},"wheel_locked":{},'
         '"direction":"{}","requested_direction":"{}",'
         '"drive_state":"{}","gear":{},"selected_gear":{},'
         '"voltage":{:.2f},"target_voltage":{:.2f},"gp_online":{},'
@@ -497,7 +510,8 @@ def json_status():
         '"displacement_m":{:.4f},"agc":{},"magnitude":{},"errors":{}}}'
     ).format(
         str(armed).lower(), str(running).lower(),
-        str(brake_released).lower(), direction, requested_direction,
+        str(brake_released).lower(), str(wheel_locked).lower(),
+        direction, requested_direction,
         drive_state, gear, selected_gear,
         current_voltage, target_voltage, str(gp_online).lower(),
         str(link_timeout_active).lower(),
@@ -569,9 +583,12 @@ try:
             elif path.startswith("/soft_stop"):
                 request_soft_stop()
                 reply(client, "THROTTLE RAMPING TO ZERO")
+            elif path.startswith("/lock"):
+                lock_wheel("REMOTE WHEEL LOCK")
+                reply(client, "WHEEL LOCKED: SV=0 V, EN=STOP, BRK=APPLIED")
             elif path.startswith("/disarm"):
                 safe_stop("REMOTE DISARM")
-                reply(client, "DISARMED + BRAKE APPLIED")
+                reply(client, "DISARMED + WHEEL LOCKED")
             elif path.startswith("/drive"):
                 requested = query(path, "d", "FORWARD")
                 if not armed:
