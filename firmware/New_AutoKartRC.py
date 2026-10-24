@@ -25,8 +25,8 @@ R86mini pulse setting:
   3200 pulses/revolution: SW5 OFF, SW6 OFF, SW7 ON, SW8 ON
 
 Traction wiring:
-  GPIO8  -> GP8630N SDA
-  GPIO9  -> GP8630N SCL
+  GPIO7  -> GP8630N SDA
+  GPIO21 -> GP8630N SCL
   GPIO13 -> BRK transistor
   GPIO14 -> EN transistor
   GPIO15 -> F/R transistor
@@ -62,8 +62,8 @@ STEER_FAST_PERIOD_US = 800    # 1250 pps
 STEER_ACCEL_US_PER_STEP = 8
 
 # GP8630N DAC.
-SDA_GPIO = 8
-SCL_GPIO = 9
+SDA_GPIO = 7
+SCL_GPIO = 21
 GP_ADDR = 0x58
 REG_MODE = 0x01
 REG_DAC = 0x02
@@ -194,7 +194,7 @@ def set_direction(name):
 
 # Initialize and verify the DAC before permitting traction.
 i2c = I2C(
-    0,
+    1,
     sda=Pin(SDA_GPIO),
     scl=Pin(SCL_GPIO),
     freq=100000,

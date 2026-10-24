@@ -27,7 +27,8 @@ required_ids = {
     "leftBtn", "centerBtn", "rightBtn", "brakeBtn", "offBtn",
     "emergencyBtn", "selectedGear", "driveState", "voltage",
     "targetVoltage", "steerNow", "steerTarget", "steerPosition",
-    "steerDirection", "zeroEncodersBtn", "encoderZeroState",
+    "steerDirection", "zeroSteerBtn", "zeroBrakeBtn", "zeroEncodersBtn",
+    "encoderZeroState",
     "brakeState", "brakeAngle", "brakeTarget", "brakeMagnet",
     "brakeValidation", "brakeError", "brakeTime", "steerDetail",
     "steerErrors", "bldcEnc", "bldcDetail", "bldcRpm", "axleRpm",
@@ -37,14 +38,14 @@ required_ids = {
 assert not required_ids - set(ids), "Missing UI IDs: {}".format(
     sorted(required_ids - set(ids))
 )
-assert len(re.findall(r"<button\b", html)) == 16, "Expected 16 controls"
+assert len(re.findall(r"<button\b", html)) == 18, "Expected 18 controls"
 
 for route, handler in {
     "/status": 'path.startswith("/status")',
     "/arm": 'path.startswith("/arm")',
     "/disarm": 'path.startswith("/disarm")',
-    "/zero_encoders": 'path.startswith("/zero_encoders")',
-    "/steer_hold": 'path.startswith("/steer_hold")',
+    "/zero_steering": 'path.startswith("/zero_steering")',
+    "/zero_brake": 'path.startswith("/zero_brake")',
     "/steer": 'path.startswith("/steer")',
     "/drive": 'path.startswith("/drive")',
     "/gear": 'path.startswith("/gear")',
@@ -58,13 +59,13 @@ steer_handler = source.index('path.startswith("/steer")', hold_handler + 1)
 assert hold_handler < steer_handler
 assert "setPointerCapture" in html
 assert "lostpointercapture" in html
-assert "setInterval(()=>send('/steer_hold?d='+dir,true),180)" in html
-assert "send('/steer_hold?d=STOP')" in html
-assert "navigator.sendBeacon('/disarm')" in html
+assert "command('/steer?v='+(dir==='LEFT'?-25:25),el)" in html
+assert "command('/steer?v=0',e.currentTarget)" in html
+assert "navigator.sendBeacon('/soft_stop')" in html
 assert "SLOWING THEN " in source
 assert "DIRECTION_SETTLE_MS" in source
 assert "brake_encoder_magnet" in source
-assert "1, brake_encoder, BRAKE_ENCODER_APPLY_SIGN" in source
+assert "brake_i2c, brake_encoder, BRAKE_ENCODER_APPLY_SIGN" in source
 assert "brake_transition_ms" in source
 assert "brake_validation" in source
 
@@ -121,20 +122,13 @@ class FakeI2C:
 
     def __init__(self, *args, **kwargs):
         self.writes = []
-        self.selected_channel = 0
+        self.bus_id = args[0] if args else None
 
-    @staticmethod
-    def scan():
-        return [0x58, 0x70]
+    def scan(self):
+        return [0x36] if self.bus_id == 0 else [0x58]
 
     def writeto(self, address, data):
         self.writes.append((address, None, bytes(data)))
-        if address == 0x70 and data:
-            mask = data[0]
-            for channel in range(8):
-                if mask == (1 << channel):
-                    self.selected_channel = channel
-                    break
 
     def writeto_mem(self, address, register, data):
         self.writes.append((address, register, bytes(data)))
@@ -143,10 +137,20 @@ class FakeI2C:
         if address == 0x36 and register == 0x0B:
             return bytes((0x20,))
         if address == 0x36 and register == 0x0E:
-            raw = (
-                FakeI2C.steer_raw if self.selected_channel == 0
-                else FakeI2C.brake_raw
-            )
+            raw = FakeI2C.steer_raw
+            return bytes(((raw >> 8) & 0xFF, raw & 0xFF))
+        return bytes(length)
+
+
+class FakeSoftI2C(FakeI2C):
+    def scan(self):
+        return [0x36]
+
+    def readfrom_mem(self, address, register, length):
+        if address == 0x36 and register == 0x0B:
+            return bytes((0x20,))
+        if address == 0x36 and register == 0x0E:
+            raw = FakeI2C.brake_raw
             return bytes(((raw >> 8) & 0xFF, raw & 0xFF))
         return bytes(length)
 
@@ -167,17 +171,37 @@ prefix = source.split("\nap = network.WLAN", 1)[0]
 prefix = prefix.replace("import network\n", "")
 prefix = prefix.replace("import socket\n", "")
 prefix = prefix.replace("import time\n", "")
-prefix = prefix.replace("from machine import I2C, Pin, SPI\n", "")
+prefix = prefix.replace("from machine import I2C, Pin, SoftI2C, SPI\n", "")
 fake_time = FakeTime()
-env = {"I2C": FakeI2C, "Pin": FakePin, "SPI": FakeSPI, "time": fake_time}
+env = {
+    "I2C": FakeI2C, "SoftI2C": FakeSoftI2C,
+    "Pin": FakePin, "SPI": FakeSPI, "time": fake_time,
+}
 exec(compile(prefix, str(FIRMWARE), "exec"), env)
+
+# The real controller requires deliberate encoder zero commands. Seed the
+# calibrated released/center references for this behavioral simulation.
+env["steer_encoder"].update(initialized=True, zero_raw=0x0800, angle=0.0)
+env["brake_encoder"].update(initialized=True, zero_raw=0x0400, angle=0.0)
+
+
+simulated_brake_motor_deg = [0.0]
 
 
 def run_brake_until_settled(limit=700):
+    previous_emitted = env["brake"].total_steps_emitted
     for _ in range(limit):
         fake_time.advance_ms(6)
         env["brake"].update()
-        angle = max(0.0, min(45.0, env["brake"].degrees()))
+        emitted = env["brake"].total_steps_emitted - previous_emitted
+        previous_emitted = env["brake"].total_steps_emitted
+        if emitted:
+            simulated_brake_motor_deg[0] += (
+                env["brake"].last_direction * emitted
+                / env["BRAKE_PULSES_PER_DEG"]
+            )
+        motor_angle = max(0.0, min(30.0, simulated_brake_motor_deg[0]))
+        angle = motor_angle / 30.0 * 7.0
         FakeI2C.brake_raw = (
             0x0400 + round(angle / 360.0 * 4096.0)
         ) & 0x0FFF
@@ -185,13 +209,22 @@ def run_brake_until_settled(limit=700):
         env["update_brake_state"]()
         if env["brake_state"] in ("APPLIED", "RELEASED"):
             return
-    raise AssertionError("Brake transition did not settle")
+    raise AssertionError(
+        "Brake transition did not settle: state={} motor={:.3f} "
+        "encoder={:.3f} target={:.3f} fault={}".format(
+            env["brake_state"], env["brake"].degrees(),
+            env["brake_encoder"]["angle"], env["brake_encoder_target_deg"],
+            env["brake"].fault,
+        )
+    )
 
 
 run_brake_until_settled()
 assert env["brake_state"] == "APPLIED"
 assert env["brake_validation"] == "PASS"
-assert abs(env["brake_encoder_reading"]()["angle"] - 45.0) < 0.01
+assert abs(env["brake_encoder_reading"]()["angle"] - 7.0) <= env[
+    "BRAKE_ENCODER_TOLERANCE_DEG"
+]
 assert env["brake_encoder_reading"]()["magnet"] == "OK"
 assert env["brake_encoder_reading"]()["online"] is True
 
@@ -200,7 +233,9 @@ run_brake_until_settled()
 assert env["armed"] is True
 assert env["brake_state"] == "RELEASED"
 assert env["brake_validation"] == "PASS"
-assert abs(env["brake_encoder_reading"]()["angle"]) < 0.01
+assert abs(env["brake_encoder_reading"]()["angle"]) <= env[
+    "BRAKE_ENCODER_TOLERANCE_DEG"
+]
 
 # Steering initializes at center and reports signed left/right motion.
 env["as5600_update"]()
@@ -259,13 +294,13 @@ for _ in range(50):
     env["steering"].update()
     env["last_steer_hold_ms"] = fake_time.ticks_ms()
 env["steer_hold"]("STOP")
-assert env["steering"].target_steps == env["steering"].current_steps
+assert env["steering"].target_steps == 0
 assert env["steering"].degrees() < 0
 env["steer_hold"]("RIGHT")
 fake_time.advance_ms(500)
 env["update_steer_hold"]()
 assert env["steer_hold_direction"] == "STOP"
-assert env["steering"].target_steps == env["steering"].current_steps
+assert env["steering"].target_steps == 0
 
 env["apply_brakes"]()
 assert env["throttle_command"] == 0.0
@@ -287,10 +322,10 @@ for field in (
     assert field in status, "Status field missing: {}".format(field)
 
 print("PASS: firmware Python and embedded JavaScript syntax")
-print("PASS: 16 responsive controls mapped to backend routes")
-print("PASS: hold-left/right press, keepalive, release and timeout contract")
+print("PASS: 18 responsive controls mapped to backend routes")
+print("PASS: one-touch full-left/full-right and explicit-center contract")
 print("PASS: steering encoder zero plus signed left/right degrees")
-print("PASS: brake AS5600 reports physical 0/45 deg, timing and validation")
+print("PASS: brake AS5600 reports released 0/applied +7 deg, timing and validation")
 print("PASS: BLDC RPM, turns, distance and displacement calculations")
 print("PASS: arm/release and disarm/apply brake transitions")
 print("PASS: forward ramp and controlled forward-to-reverse transition")

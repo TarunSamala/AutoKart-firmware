@@ -30,8 +30,8 @@ from machine import Pin, I2C
 SSID = "BLD750-Control"
 PASSWORD = "12345678"
 
-SDA_PIN = 8
-SCL_PIN = 9
+SDA_PIN = 7
+SCL_PIN = 21
 
 GP_ADDR = 0x58
 
@@ -57,7 +57,7 @@ COMMAND_TIMEOUT_MS = 5000
 # ------------------------------------------------------------
 
 i2c = I2C(
-    0,
+    1,
     sda=Pin(SDA_PIN),
     scl=Pin(SCL_PIN),
     freq=100000

@@ -332,8 +332,8 @@ brake = StepperAxis(
 # GP8630N I2C
 # ============================================================
 
-SDA_PIN = 8
-SCL_PIN = 9
+SDA_PIN = 7
+SCL_PIN = 21
 
 GP_ADDR = 0x58
 REG_MODE = 0x01
@@ -341,7 +341,7 @@ REG_DAC = 0x02
 MODE_0_10V = 0x1C
 
 i2c = I2C(
-    0,
+    1,
     sda=Pin(SDA_PIN),
     scl=Pin(SCL_PIN),
     freq=100000
@@ -1832,4 +1832,3 @@ finally:
 
     print("CONTROLLER STOPPED")
     print("THROTTLE = 0")
-

@@ -3,8 +3,8 @@
 Isolated wiring:
   AS5600 VCC -> ESP32-S3 3V3
   AS5600 GND -> ESP32-S3 GND
-  AS5600 SDA -> ESP32-S3 GPIO8
-  AS5600 SCL -> ESP32-S3 GPIO9
+  AS5600 SDA -> ESP32-S3 GPIO1
+  AS5600 SCL -> ESP32-S3 GPIO2
 
 Commands:
   r / read  - print one sample
@@ -23,8 +23,8 @@ from machine import I2C, Pin
 import time
 
 
-SDA_GPIO = 8
-SCL_GPIO = 9
+SDA_GPIO = 1
+SCL_GPIO = 2
 I2C_FREQUENCY = 100_000
 AS5600_ADDRESS = 0x36
 ZERO_FILE = "as5600_zero.txt"

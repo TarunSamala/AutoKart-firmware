@@ -3,9 +3,9 @@
 Temporary test wiring:
   AS5047P VCC -> ESP32-S3 3V3 (or the module's regulated 3V3 input)
   AS5047P GND -> ESP32-S3 GND
-  AS5047P CLK -> ESP32-S3 GPIO13
-  AS5047P MOSI -> ESP32-S3 GPIO14
-  AS5047P MISO -> ESP32-S3 GPIO15
+  AS5047P CLK -> ESP32-S3 GPIO18
+  AS5047P MOSI -> ESP32-S3 GPIO41
+  AS5047P MISO -> ESP32-S3 GPIO42
   AS5047P CSn -> ESP32-S3 GPIO16
 
 SPI mode 1 is used. The sensor magnet must be centered over the IC.
@@ -15,9 +15,9 @@ from machine import Pin, SPI
 import time
 
 
-SCK_PIN = 13
-MOSI_PIN = 14
-MISO_PIN = 15
+SCK_PIN = 18
+MOSI_PIN = 41
+MISO_PIN = 42
 CS_PIN = 16
 SPI_FREQ = 1000000
 
@@ -90,4 +90,3 @@ while True:
         )
     )
     time.sleep_ms(100)
-

@@ -14,7 +14,7 @@ from machine import Pin, I2C
 #   SDA = GPIO7, I2C(1)
 #   SCL = GPIO21, I2C(1)
 #   Address = 0x58
-#   Dedicated bus; do not join to PCA9548A GPIO1/GPIO2
+#   Dedicated DAC bus; encoder buses use GPIO1/GPIO2 and GPIO35/GPIO36
 #
 # PN2222A CONTROL
 #   GPIO13 -> BRK transistor

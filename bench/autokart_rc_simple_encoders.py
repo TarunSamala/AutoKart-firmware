@@ -5,8 +5,8 @@ Functions:
   - traction: forward=CCW, reverse=CW, controlled ramp and five voltage gears
   - momentary brake: press applies, release disengages while armed
   - arm releases stepper and BLD750 brakes; disarm applies both brakes
-  - steering AS5600 through PCA9548A channel 0
-  - brake AS5600 through PCA9548A channel 1
+  - closed-loop steering AS5600 directly on I2C(0), GPIO1/GPIO2
+  - closed-loop brake AS5600 directly on SoftI2C, GPIO35/GPIO36
   - AS5047P BLDC encoder through SPI with RPM, turns and distance telemetry
 
 BLDC distance is nominal and cannot detect chain or tyre slip. This is a
@@ -16,7 +16,7 @@ wheels-off-ground bench controller, not production vehicle firmware.
 import network
 import socket
 import time
-from machine import I2C, Pin, SPI
+from machine import I2C, Pin, SoftI2C, SPI
 
 
 SSID = "AutoKart-RC"
@@ -26,23 +26,25 @@ PASSWORD = "12345678"
 # armed. Explicit BRAKE / DISARM remain immediate safety actions.
 CONTROL_LINK_TIMEOUT_MS = 5000
 
-# Steering driver: tested scale is 2000 pulses for 45 degrees. RC travel is
-# limited to +/-25 degrees, therefore each side uses about 1111 pulses.
+# Steering DM860: SW5-SW8 are configured for 3200 pulses/revolution and the
+# AS5600 is mounted 1:1 on the steering shaft. Encoder feedback, not pulse
+# counting, decides when the requested angle has been reached.
 STEER_STEP_GPIO = 4
 STEER_DIR_GPIO = 5
 # The tested DM860/NPN interface is electrically inverted relative to the
 # earlier driver setup: GPIO LOW produces physical RIGHT rotation.
 STEER_RIGHT_DIR = 0
 STEER_LIMIT_DEG = 25.0
-STEER_PULSES_AT_45 = 2000
-STEER_PULSES_PER_DEG = STEER_PULSES_AT_45 / 45.0
-STEER_START_PPS = 250
-STEER_MAX_PPS = 1200
+STEER_PULSES_PER_REV = 3200
+STEER_PULSES_PER_DEG = STEER_PULSES_PER_REV / 360.0
+STEER_START_PPS = 700
+STEER_MAX_PPS = 4000
 STEER_HOLD_TIMEOUT_MS = 450
 STEER_ENCODER_RIGHT_SIGN = 1
 BRAKE_ENCODER_APPLY_SIGN = 1
+STEER_ENCODER_TOLERANCE_DEG = 0.40
 
-# Brake TB6600 with physical AS5600 position feedback on PCA channel 1.
+# Brake TB6600 with physical AS5600 position feedback on its own SoftI2C bus.
 BRAKE_STEP_GPIO = 38
 BRAKE_DIR_GPIO = 39
 BRAKE_EN_GPIO = 40
@@ -51,14 +53,25 @@ BRAKE_ENABLE_LEVEL = 0
 BRAKE_DISABLE_LEVEL = 1
 BRAKE_PULSES_PER_REV = 3200
 BRAKE_PULSES_PER_DEG = BRAKE_PULSES_PER_REV / 360.0
-BRAKE_APPLY_DEG = 45.0
+BRAKE_START_PPS = 700
+BRAKE_MAX_PPS = 2500
+# The brake actuator moves about 30 motor degrees while the installed AS5600
+# reports 0..7 degrees. Control uses the encoder endpoints; motor degrees only
+# convert the encoder error into step pulses.
+BRAKE_APPLY_DEG = 30.0
+BRAKE_ENCODER_APPLY_DEG = 7.0
+BRAKE_ENCODER_TOLERANCE_DEG = 0.25
+BRAKE_MOTOR_DEG_PER_ENCODER_DEG = (
+    BRAKE_APPLY_DEG / BRAKE_ENCODER_APPLY_DEG
+)
 
-# Frozen separate I2C buses: PCA/encoders on I2C(0), DAC on I2C(1).
-PCA_SDA_GPIO = 1
-PCA_SCL_GPIO = 2
+# Direct encoder buses plus the dedicated DAC bus.
+STEERING_SDA_GPIO = 1
+STEERING_SCL_GPIO = 2
+BRAKE_SDA_GPIO = 35
+BRAKE_SCL_GPIO = 36
 GP_SDA_GPIO = 7
 GP_SCL_GPIO = 21
-PCA_ADDR = 0x70
 AS5600_ADDR = 0x36
 GP_ADDR = 0x58
 GP_MODE_REG = 0x01
@@ -120,6 +133,10 @@ class StepperAxis:
         self.target_steps = 0
         self.last_step_us = time.ticks_us()
         self.last_direction = 0
+        self.total_steps_emitted = 0
+        self.motion_start_total_steps = 0
+        self.motion_limit_steps = 0
+        self.fault = ""
 
     def degrees(self):
         return self.current_steps / self.pulses_per_degree
@@ -130,6 +147,24 @@ class StepperAxis:
     def set_target(self, degrees):
         self.target_steps = round(float(degrees) * self.pulses_per_degree)
 
+    def command_target(self, degrees, maximum_travel_degrees):
+        self.set_target(degrees)
+        self.motion_start_total_steps = self.total_steps_emitted
+        self.motion_limit_steps = max(
+            1, round(abs(float(maximum_travel_degrees)) * self.pulses_per_degree)
+        )
+        self.fault = ""
+
+    def sync_position(self, degrees):
+        self.current_steps = round(float(degrees) * self.pulses_per_degree)
+
+    def reset_position(self):
+        self.current_steps = 0
+        self.target_steps = 0
+        self.motion_start_total_steps = self.total_steps_emitted
+        self.motion_limit_steps = 0
+        self.fault = ""
+
     def hold(self):
         self.target_steps = self.current_steps
 
@@ -137,8 +172,19 @@ class StepperAxis:
         return self.current_steps == self.target_steps
 
     def update(self):
+        if self.fault:
+            return
         if self.at_target():
             self.period_us = self.start_period_us
+            self.last_direction = 0
+            return
+        if (
+            self.motion_limit_steps > 0
+            and self.total_steps_emitted - self.motion_start_total_steps
+            >= self.motion_limit_steps
+        ):
+            self.target_steps = self.current_steps
+            self.fault = "TRAVEL LIMIT"
             self.last_direction = 0
             return
         move = 1 if self.target_steps > self.current_steps else -1
@@ -156,6 +202,7 @@ class StepperAxis:
         time.sleep_us(STEP_HIGH_US)
         self.step.value(0)
         self.current_steps += move
+        self.total_steps_emitted += 1
         self.last_step_us = now
         self.period_us = max(self.fast_period_us, self.period_us - 10)
 
@@ -187,18 +234,26 @@ steering = StepperAxis(
 )
 brake = StepperAxis(
     BRAKE_STEP_GPIO, BRAKE_DIR_GPIO, BRAKE_PULSES_PER_DEG,
-    BRAKE_APPLY_DIR, 250, 900,
+    BRAKE_APPLY_DIR, BRAKE_START_PPS, BRAKE_MAX_PPS,
 )
 
-pca_i2c = I2C(
-    0, sda=Pin(PCA_SDA_GPIO), scl=Pin(PCA_SCL_GPIO), freq=100_000
+steering_i2c = I2C(
+    0,
+    sda=Pin(STEERING_SDA_GPIO),
+    scl=Pin(STEERING_SCL_GPIO),
+    freq=100_000,
+)
+brake_i2c = SoftI2C(
+    sda=Pin(BRAKE_SDA_GPIO),
+    scl=Pin(BRAKE_SCL_GPIO),
+    freq=100_000,
 )
 gp_i2c = I2C(
     1, sda=Pin(GP_SDA_GPIO), scl=Pin(GP_SCL_GPIO), freq=100_000
 )
-pca_i2c_devices = pca_i2c.scan()
+steering_i2c_devices = steering_i2c.scan()
+brake_i2c_devices = brake_i2c.scan()
 gp_i2c_devices = gp_i2c.scan()
-pca_present = PCA_ADDR in pca_i2c_devices
 gp_present = GP_ADDR in gp_i2c_devices
 if gp_present:
     gp_i2c.writeto_mem(GP_ADDR, GP_MODE_REG, bytes((GP_MODE_0_10V,)))
@@ -221,13 +276,15 @@ drive_state = "STOPPED"
 reversal_pending = False
 direction_settle_started_ms = None
 last_throttle_ramp_ms = time.ticks_ms()
-brake_state = "APPLYING"
+brake_state = "OPEN LOOP READY"
 brake_transition_started_ms = time.ticks_ms()
 brake_transition_ms = 0
-brake_validation = "MOVING"
+brake_validation = "FEEDBACK OPTIONAL"
 brake_validation_error_deg = 0.0
 brake_transition_count = 0
 steer_hold_direction = "STOP"
+steer_encoder_target_deg = 0.0
+brake_encoder_target_deg = 0.0
 last_steer_hold_ms = 0
 last_contact_ms = time.ticks_ms()
 link_timeout_active = False
@@ -237,12 +294,12 @@ last_bldc_encoder_ms = 0
 steer_encoder = {
     "online": False, "magnet": "NO SENSOR", "raw": -1,
     "angle": 0.0, "errors": 0, "initialized": False,
-    "zero_raw": -1, "direction": "CENTER",
+    "zero_raw": -1, "direction": "CENTER", "last_error": "",
 }
 brake_encoder = {
     "online": False, "magnet": "NO SENSOR", "raw": -1,
     "angle": 0.0, "errors": 0, "initialized": False,
-    "zero_raw": -1,
+    "zero_raw": -1, "last_error": "",
 }
 bldc_encoder = {
     "online": False, "magnet": "NO SENSOR", "raw": -1,
@@ -255,21 +312,11 @@ bldc_encoder = {
 }
 
 
-def pca_select(channel):
-    if not pca_present:
-        return False
-    pca_i2c.writeto(PCA_ADDR, bytes((1 << channel,)))
-    return True
-
-
-def as5600_read_channel(channel, state, direction_sign, allow_initialize=True):
+def as5600_read_bus(bus, state, direction_sign, bus_name,
+                    allow_initialize=True):
     try:
-        if not pca_select(channel):
-            state["online"] = False
-            state["magnet"] = "PCA9548A MISSING"
-            return
-        status = pca_i2c.readfrom_mem(AS5600_ADDR, 0x0B, 1)[0]
-        data = pca_i2c.readfrom_mem(AS5600_ADDR, 0x0E, 2)
+        status = bus.readfrom_mem(AS5600_ADDR, 0x0B, 1)[0]
+        data = bus.readfrom_mem(AS5600_ADDR, 0x0E, 2)
         raw = ((data[0] << 8) | data[1]) & 0x0FFF
         if status & 0x08:
             magnet = "TOO STRONG"
@@ -279,7 +326,7 @@ def as5600_read_channel(channel, state, direction_sign, allow_initialize=True):
             magnet = "OK"
         else:
             magnet = "NO MAGNET"
-        state.update(online=True, magnet=magnet, raw=raw)
+        state.update(online=True, magnet=magnet, raw=raw, last_error="")
         if magnet == "OK":
             if not state["initialized"]:
                 if not allow_initialize:
@@ -291,26 +338,62 @@ def as5600_read_channel(channel, state, direction_sign, allow_initialize=True):
             if abs(angle) < 0.15:
                 angle = 0.0
             state["angle"] = angle
-    except Exception:
+    except Exception as error:
         state["online"] = False
-        state["magnet"] = "READ ERROR"
+        state["last_error"] = repr(error)
+        try:
+            devices = bus.scan()
+            state["magnet"] = (
+                "AS5600 MISSING ON " + bus_name
+                if AS5600_ADDR not in devices else "READ ERROR ON " + bus_name
+            )
+        except Exception:
+            state["magnet"] = "I2C BUS ERROR ON " + bus_name
         state["errors"] += 1
 
 
 def as5600_update():
-    as5600_read_channel(0, steer_encoder, STEER_ENCODER_RIGHT_SIGN)
+    as5600_read_bus(
+        steering_i2c, steer_encoder, STEER_ENCODER_RIGHT_SIGN,
+        "I2C0 GPIO1/GPIO2",
+        allow_initialize=False,
+    )
+    if (
+        steer_encoder["initialized"] and steer_encoder["online"]
+        and steer_encoder["magnet"] == "OK"
+    ):
+        # Re-anchor pulse accounting to the measured steering position. A
+        # center command therefore keeps correcting toward encoder 0 degrees
+        # even after missed steps or mechanical slip.
+        if (
+            abs(steer_encoder["angle"] - steer_encoder_target_deg)
+            <= STEER_ENCODER_TOLERANCE_DEG
+        ):
+            steering.sync_position(steer_encoder_target_deg)
+        else:
+            steering.sync_position(steer_encoder["angle"])
     steer_encoder["direction"] = (
         "RIGHT" if steer_encoder["angle"] > 0.15
         else "LEFT" if steer_encoder["angle"] < -0.15
         else "CENTER"
     )
-    brake_is_at_released_home = (
-        brake.at_target() and abs(brake.degrees()) < 1.0
+    as5600_read_bus(
+        brake_i2c, brake_encoder, BRAKE_ENCODER_APPLY_SIGN,
+        "SOFT I2C GPIO35/GPIO36",
+        allow_initialize=False,
     )
-    as5600_read_channel(
-        1, brake_encoder, BRAKE_ENCODER_APPLY_SIGN,
-        allow_initialize=brake_is_at_released_home,
-    )
+    if (
+        brake_encoder["initialized"] and brake_encoder["online"]
+        and brake_encoder["magnet"] == "OK"
+    ):
+        if (
+            abs(brake_encoder["angle"] - brake_encoder_target_deg)
+            <= BRAKE_ENCODER_TOLERANCE_DEG
+        ):
+            measured = brake_encoder_target_deg
+        else:
+            measured = brake_encoder["angle"]
+        brake.sync_position(measured * BRAKE_MOTOR_DEG_PER_ENCODER_DEG)
 
 
 def as5047_transfer(frame):
@@ -424,15 +507,31 @@ def update_encoders():
         as5600_update()
 
 
-def zero_encoders():
-    """Zero steering and BLDC while preserving brake released calibration."""
+def zero_steering_encoder():
     if steer_encoder["online"] and steer_encoder["magnet"] == "OK":
         steer_encoder.update(
             initialized=True, zero_raw=steer_encoder["raw"],
             angle=0.0, direction="CENTER",
         )
-        steering.current_steps = 0
-        steering.target_steps = 0
+        steering.reset_position()
+        return True
+    return False
+
+
+def zero_brake_encoder():
+    global brake_state, brake_encoder_target_deg
+    if brake_encoder["online"] and brake_encoder["magnet"] == "OK":
+        brake_encoder.update(
+            initialized=True, zero_raw=brake_encoder["raw"], angle=0.0,
+        )
+        brake.reset_position()
+        brake_encoder_target_deg = 0.0
+        brake_state = "RELEASED"
+        return True
+    return False
+
+
+def zero_bldc_encoder():
     if bldc_encoder["online"] and bldc_encoder["magnet"] == "OK":
         now_us = time.ticks_us()
         raw = bldc_encoder["raw"]
@@ -442,11 +541,16 @@ def zero_encoders():
             axle_rpm=0.0, motor_revs=0.0, full_turns=0,
             distance_m=0.0, displacement_m=0.0, speed_kmh=0.0,
         )
-    # Brake zero is captured at boot in the released position, before apply.
-    return (
-        steer_encoder["initialized"] and brake_encoder["initialized"]
-        and bldc_encoder["initialized"]
-    )
+        return True
+    return False
+
+
+def zero_encoders():
+    """Legacy combined zero for stationary bench use."""
+    steering_ok = zero_steering_encoder()
+    brake_ok = zero_brake_encoder()
+    bldc_ok = zero_bldc_encoder()
+    return steering_ok and brake_ok and bldc_ok
 
 
 def write_voltage(voltage):
@@ -574,38 +678,87 @@ def brake_encoder_reading():
         "raw": brake_encoder["raw"],
         "initialized": brake_encoder["initialized"],
         "errors": brake_encoder["errors"],
-        "target": brake.target_degrees(),
+        "target": brake_encoder_target_deg,
     }
 
 
 def apply_brakes():
     global brake_state, brake_transition_started_ms, brake_validation
+    global brake_encoder_target_deg
     traction_stop()
     bld_brk.value(0)
     brake_enable.value(BRAKE_ENABLE_LEVEL)
-    brake.set_target(BRAKE_APPLY_DEG)
+    brake_encoder_target_deg = BRAKE_ENCODER_APPLY_DEG
+    feedback_ready = (
+        brake_encoder["initialized"] and brake_encoder["online"]
+        and brake_encoder["magnet"] == "OK"
+    )
+    current = brake_encoder["angle"] if feedback_ready else (
+        brake.degrees() / BRAKE_MOTOR_DEG_PER_ENCODER_DEG
+    )
+    maximum_travel = (
+        abs(brake_encoder_target_deg - current)
+        * BRAKE_MOTOR_DEG_PER_ENCODER_DEG + 20.0
+    )
+    brake.command_target(BRAKE_APPLY_DEG, maximum_travel)
     brake_state = "APPLYING"
     brake_validation = "MOVING"
     brake_transition_started_ms = time.ticks_ms()
+    return True
 
 
 def release_brakes():
     global brake_state, brake_transition_started_ms, brake_validation
+    global brake_encoder_target_deg
     traction_stop()
     bld_brk.value(0)
     brake_enable.value(BRAKE_ENABLE_LEVEL)
-    brake.set_target(0.0)
+    brake_encoder_target_deg = 0.0
+    feedback_ready = (
+        brake_encoder["initialized"] and brake_encoder["online"]
+        and brake_encoder["magnet"] == "OK"
+    )
+    current = brake_encoder["angle"] if feedback_ready else (
+        brake.degrees() / BRAKE_MOTOR_DEG_PER_ENCODER_DEG
+    )
+    maximum_travel = (
+        abs(current) * BRAKE_MOTOR_DEG_PER_ENCODER_DEG + 20.0
+    )
+    brake.command_target(0.0, maximum_travel)
     brake_state = "RELEASING"
     brake_validation = "MOVING"
     brake_transition_started_ms = time.ticks_ms()
+    return True
 
 
 def update_brake_state():
     global brake_state, brake_transition_ms, brake_validation
     global brake_validation_error_deg, brake_transition_count
-    if not brake.at_target():
+    if brake_state not in ("APPLYING", "RELEASING"):
         return
     encoder = brake_encoder_reading()
+    encoder_valid = (
+        encoder["initialized"] and encoder["online"]
+        and encoder["magnet"] == "OK"
+    )
+    brake_validation_error_deg = abs(encoder["angle"] - encoder["target"])
+    if brake.fault:
+        brake_state = "FAULT"
+        brake_validation = brake.fault
+        brake_transition_ms = max(
+            0, time.ticks_diff(time.ticks_ms(), brake_transition_started_ms)
+        )
+        return
+    if encoder_valid:
+        if brake_validation_error_deg > BRAKE_ENCODER_TOLERANCE_DEG:
+            return
+        completion_validation = "PASS"
+    else:
+        # Encoder feedback is optional during actuator bring-up. In fallback
+        # mode, completion means the commanded pulse target was reached.
+        if not brake.at_target():
+            return
+        completion_validation = "OPEN LOOP"
     if brake_state == "APPLYING":
         brake_state = "APPLIED"
     elif brake_state == "RELEASING":
@@ -617,59 +770,65 @@ def update_brake_state():
     brake_transition_ms = max(
         0, time.ticks_diff(time.ticks_ms(), brake_transition_started_ms)
     )
-    brake_validation_error_deg = abs(encoder["angle"] - encoder["target"])
-    brake_validation = (
-        "PASS" if encoder["online"] and encoder["magnet"] == "OK"
-        and brake_validation_error_deg <= 3.0 else "FAIL"
-    )
+    brake_validation = completion_validation
     brake_transition_count += 1
 
 
 def steer_hold(command):
     global steer_hold_direction, last_steer_hold_ms
+    global steer_encoder_target_deg
     steer_hold_direction = command
     last_steer_hold_ms = time.ticks_ms()
     if command == "LEFT":
-        steering.set_target(-STEER_LIMIT_DEG)
+        steer_encoder_target_deg = -STEER_LIMIT_DEG
     elif command == "RIGHT":
-        steering.set_target(STEER_LIMIT_DEG)
+        steer_encoder_target_deg = STEER_LIMIT_DEG
     else:
         # Spring-return behavior: releasing either steering arrow always
         # commands the calibrated center. This also handles STOP from the UI.
-        steering.set_target(0.0)
+        steer_encoder_target_deg = 0.0
         steer_hold_direction = "STOP"
+    current = steer_encoder["angle"] if steer_encoder["initialized"] else 0.0
+    steering.command_target(
+        steer_encoder_target_deg,
+        abs(steer_encoder_target_deg - current) + 15.0,
+    )
 
 
 def update_steer_hold():
-    global steer_hold_direction
+    global steer_hold_direction, steer_encoder_target_deg
     if steer_hold_direction == "STOP":
         return
     if time.ticks_diff(time.ticks_ms(), last_steer_hold_ms) > STEER_HOLD_TIMEOUT_MS:
         # If pointer-up is lost because Wi-Fi/browser focus changes, fail back
         # to center instead of leaving the steering latched at an angle.
-        steering.set_target(0.0)
+        steer_encoder_target_deg = 0.0
+        current = steer_encoder["angle"] if steer_encoder["initialized"] else 0.0
+        steering.command_target(0.0, abs(current) + 15.0)
         steer_hold_direction = "STOP"
 
 
 def arm_controller():
     global armed
     if armed:
-        return
+        return True
     armed = True
     release_brakes()
+    steer_hold("STOP")
+    return True
 
 
 def disarm_controller(reason):
     global armed, steer_hold_direction
     armed = False
-    steering.hold()
+    steer_hold("STOP")
     steer_hold_direction = "STOP"
     apply_brakes()
     print("DISARM:", reason)
 
 
-# Capture steering, released brake and BLDC positions as 0 degrees before any
-# actuator movement. Failed/missing sensors remain available for later retry.
+# Read optional feedback at boot. Actuator control remains available when the
+# encoders are absent, weak, or not yet zeroed.
 as5600_update()
 as5047_update()
 apply_brakes()
@@ -678,13 +837,13 @@ apply_brakes()
 HTML = r'''<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>AutoKart RC</title><style>
-:root{--bg:#070a10;--panel:#111a26;--panel2:#0b121c;--line:#26364c;--text:#f6f9ff;--muted:#8e9db2;--blue:#397dff;--cyan:#55d9ff;--green:#19b978;--red:#ed4054;--amber:#ffbd4a}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -15%,#1b2d48 0,var(--bg) 43%);color:var(--text);font-family:system-ui,sans-serif;touch-action:manipulation;overscroll-behavior:none;-webkit-user-select:none;user-select:none}.app{max-width:560px;margin:auto;padding:12px 12px calc(18px + env(safe-area-inset-bottom))}.top{display:flex;align-items:center;justify-content:space-between;gap:12px}.brand h1{font-size:25px;line-height:1;margin:8px 0 5px;letter-spacing:-.045em}.brand small{color:var(--muted)}.state{padding:9px 13px;border:1px solid #74323b;border-radius:999px;background:#39161c;color:#ff99a4;font-size:11px;font-weight:900;letter-spacing:.09em;white-space:nowrap}.state.on{border-color:#267052;background:#103a2a;color:#75e8b2}.state.busy{border-color:#8a6724;background:#3e3014;color:#ffd477}.card{background:linear-gradient(145deg,#151f2d,var(--panel));border:1px solid var(--line);border-radius:19px;padding:14px;margin-top:11px;box-shadow:0 12px 30px #0005}.label{color:var(--muted);font-size:10px;font-weight:900;letter-spacing:.16em;margin-bottom:10px}.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}button{position:relative;border:1px solid #ffffff14;border-radius:14px;min-height:54px;background:#2b394e;color:white;font-size:15px;font-weight:850;cursor:pointer;box-shadow:inset 0 1px #ffffff1a,0 5px 12px #0003;transition:transform .09s,filter .09s,box-shadow .16s;-webkit-tap-highlight-color:transparent}button:active,button.pressed{transform:scale(.95);filter:brightness(.82);box-shadow:inset 0 2px 8px #0005}button:focus-visible{outline:3px solid white;outline-offset:3px}button:disabled{opacity:.34;filter:saturate(.3);cursor:not-allowed;transform:none}.green{background:linear-gradient(145deg,#20c987,#10945f)}.blue{background:linear-gradient(145deg,#438dff,#2867dc)}.red{background:linear-gradient(145deg,#ff4b5f,#cc2c41)}.pad{display:grid;grid-template-columns:repeat(3,82px);grid-template-rows:repeat(3,72px);justify-content:center;gap:9px}.pad button{min-height:72px;border-radius:23px;font-size:29px}.pad .up{grid-column:2;grid-row:1}.pad .left{grid-column:1;grid-row:2}.pad .center{grid-column:2;grid-row:2;border-radius:50%;color:var(--cyan)}.pad .right{grid-column:3;grid-row:2}.pad .down{grid-column:2;grid-row:3}.pad .active{outline:3px solid var(--cyan);outline-offset:2px;box-shadow:0 0 24px #55d9ff55}.gears button{font-size:18px;border-radius:15px}.gears button.active{outline:3px solid var(--cyan);outline-offset:2px}.off,.brake,.stop{width:100%;margin-top:9px}.off{background:#202c3c}.brake{min-height:76px;font-size:20px}.stop{position:sticky;bottom:calc(8px + env(safe-area-inset-bottom));z-index:5;min-height:60px;font-size:17px;box-shadow:0 10px 30px #ed405455}.telemetry{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tile{background:var(--panel2);border:1px solid #213047;padding:10px;border-radius:12px}.tile span{display:block;color:var(--muted);font-size:9px;font-weight:750;letter-spacing:.09em;margin-bottom:4px}.tile b{font-size:13px}.wide{grid-column:1/-1}.pass{color:#73e6ae}.warn{color:#ffd477}.bad{color:#ff929d}.sensors{color:var(--muted);font-size:10px;line-height:1.8;margin-top:10px}.message{position:sticky;bottom:76px;z-index:4;text-align:center;background:#101925eF;border:1px solid var(--line);border-radius:11px;color:#ffd477;font-size:11px;padding:9px;min-height:35px;margin-top:10px;backdrop-filter:blur(8px)}.message.ok{color:#77e8b3}.message.bad{color:#ff929d}.hint{text-align:center;color:var(--muted);font-size:10px;margin-top:8px}@media(max-width:390px){.app{padding:8px 8px calc(14px + env(safe-area-inset-bottom))}.card{padding:12px}.pad{grid-template-columns:repeat(3,72px);grid-template-rows:repeat(3,65px)}.pad button{min-height:65px}.row{gap:5px}.gears button{font-size:16px}.brand h1{font-size:23px}}
+:root{--bg:#070a10;--panel:#111a26;--panel2:#0b121c;--line:#26364c;--text:#f6f9ff;--muted:#8e9db2;--blue:#397dff;--cyan:#55d9ff;--green:#19b978;--red:#ed4054;--amber:#ffbd4a}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -15%,#1b2d48 0,var(--bg) 43%);color:var(--text);font-family:system-ui,sans-serif;touch-action:manipulation;overscroll-behavior:none;-webkit-user-select:none;user-select:none}.app{max-width:560px;margin:auto;padding:12px 12px calc(18px + env(safe-area-inset-bottom))}.top{display:flex;align-items:center;justify-content:space-between;gap:12px}.brand h1{font-size:25px;line-height:1;margin:8px 0 5px;letter-spacing:-.045em}.brand small{color:var(--muted)}.state{padding:9px 13px;border:1px solid #74323b;border-radius:999px;background:#39161c;color:#ff99a4;font-size:11px;font-weight:900;letter-spacing:.09em;white-space:nowrap}.state.on{border-color:#267052;background:#103a2a;color:#75e8b2}.state.busy{border-color:#8a6724;background:#3e3014;color:#ffd477}.card{background:linear-gradient(145deg,#151f2d,var(--panel));border:1px solid var(--line);border-radius:19px;padding:14px;margin-top:11px;box-shadow:0 12px 30px #0005}.label{color:var(--muted);font-size:10px;font-weight:900;letter-spacing:.16em;margin-bottom:10px}.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}button{position:relative;border:1px solid #ffffff14;border-radius:14px;min-height:54px;background:#2b394e;color:white;font-size:15px;font-weight:850;cursor:pointer;box-shadow:inset 0 1px #ffffff1a,0 5px 12px #0003;transition:transform .09s,filter .09s,box-shadow .16s;-webkit-tap-highlight-color:transparent}button:active,button.pressed{transform:scale(.95);filter:brightness(.82);box-shadow:inset 0 2px 8px #0005}button:focus-visible{outline:3px solid white;outline-offset:3px}button:disabled{opacity:.34;filter:saturate(.3);cursor:not-allowed;transform:none}.green{background:linear-gradient(145deg,#20c987,#10945f)}.blue{background:linear-gradient(145deg,#438dff,#2867dc)}.red{background:linear-gradient(145deg,#ff4b5f,#cc2c41)}.magnet-badge{margin-top:10px;padding:10px;border:1px solid #49576a;border-radius:12px;text-align:center;font-size:12px;font-weight:900;letter-spacing:.08em;background:#202c3c;color:#c8d2df}.magnet-badge.ok{border-color:#267052;background:#103a2a;color:#75e8b2}.magnet-badge.weak{border-color:#8a6724;background:#3e3014;color:#ffd477}.magnet-badge.fault{border-color:#74323b;background:#39161c;color:#ff99a4}.pad{display:grid;grid-template-columns:repeat(3,82px);grid-template-rows:repeat(3,72px);justify-content:center;gap:9px}.pad button{min-height:72px;border-radius:23px;font-size:29px}.pad .up{grid-column:2;grid-row:1}.pad .left{grid-column:1;grid-row:2}.pad .center{grid-column:2;grid-row:2;border-radius:50%;color:var(--cyan)}.pad .right{grid-column:3;grid-row:2}.pad .down{grid-column:2;grid-row:3}.pad .active{outline:3px solid var(--cyan);outline-offset:2px;box-shadow:0 0 24px #55d9ff55}.gears button{font-size:18px;border-radius:15px}.gears button.active{outline:3px solid var(--cyan);outline-offset:2px}.off,.brake,.stop{width:100%;margin-top:9px}.off{background:#202c3c}.brake{min-height:76px;font-size:20px}.stop{position:sticky;bottom:calc(8px + env(safe-area-inset-bottom));z-index:5;min-height:60px;font-size:17px;box-shadow:0 10px 30px #ed405455}.telemetry{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tile{background:var(--panel2);border:1px solid #213047;padding:10px;border-radius:12px}.tile span{display:block;color:var(--muted);font-size:9px;font-weight:750;letter-spacing:.09em;margin-bottom:4px}.tile b{font-size:13px}.wide{grid-column:1/-1}.pass{color:#73e6ae}.warn{color:#ffd477}.bad{color:#ff929d}.sensors{color:var(--muted);font-size:10px;line-height:1.8;margin-top:10px}.message{position:sticky;bottom:76px;z-index:4;text-align:center;background:#101925eF;border:1px solid var(--line);border-radius:11px;color:#ffd477;font-size:11px;padding:9px;min-height:35px;margin-top:10px;backdrop-filter:blur(8px)}.message.ok{color:#77e8b3}.message.bad{color:#ff929d}.hint{text-align:center;color:var(--muted);font-size:10px;margin-top:8px}@media(max-width:390px){.app{padding:8px 8px calc(14px + env(safe-area-inset-bottom))}.card{padding:12px}.pad{grid-template-columns:repeat(3,72px);grid-template-rows:repeat(3,65px)}.pad button{min-height:65px}.row{gap:5px}.gears button{font-size:16px}.brand h1{font-size:23px}}
 </style></head><body><main class="app">
 <div class="top"><div class="brand"><h1>AutoKart RC</h1><small>Bench control · wheels raised</small></div><div id="armed" class="state">DISARMED</div></div>
-<section class="card"><div class="row"><button id="armBtn" class="green">ARM</button><button id="disarmBtn" class="red">DISARM</button></div><button id="zeroEncodersBtn" class="off">ZERO ENCODERS</button><div class="hint">Keep steering centered and BLDC stopped before zeroing</div></section>
-<section class="card"><div class="label">DRIVE + STEERING · HOLD ◀ / ▶ FOR 25°</div><div class="pad"><button id="forward" class="up green" aria-label="Drive forward" title="Drive forward">▲</button><button id="leftBtn" class="left blue" aria-label="Hold for 25 degrees left" title="Hold for 25 degrees left">◀</button><button id="centerBtn" class="center" aria-label="Center steering" title="Center steering">●</button><button id="rightBtn" class="right blue" aria-label="Hold for 25 degrees right" title="Hold for 25 degrees right">▶</button><button id="reverse" class="down" aria-label="Drive backward" title="Drive backward">▼</button></div><div class="hint">Hold left/right to steer · release returns to 0° · center forces 0°</div></section>
+<section class="card"><div class="row"><button id="armBtn" class="green">ARM</button><button id="disarmBtn" class="red">DISARM</button></div><div class="row" style="margin-top:8px"><button id="zeroSteerBtn">ZERO STEERING</button><button id="zeroBrakeBtn">ZERO BRAKE</button></div><button id="zeroEncodersBtn" hidden></button><div class="hint">Optional feedback setup: physically position an actuator before zeroing its encoder</div></section>
+<section class="card"><div class="label">DRIVE + STEERING · TAP ◀ / ▶ FOR FULL 25°</div><div class="pad"><button id="forward" class="up green" aria-label="Drive forward" title="Drive forward">▲</button><button id="leftBtn" class="left blue" aria-label="Full left 25 degrees" title="Full left 25 degrees">◀</button><button id="centerBtn" class="center" aria-label="Center steering" title="Center steering">●</button><button id="rightBtn" class="right blue" aria-label="Full right 25 degrees" title="Full right 25 degrees">▶</button><button id="reverse" class="down" aria-label="Drive backward" title="Drive backward">▼</button></div><div class="hint">One tap selects full left/right · center returns to encoder 0°</div></section>
 <section class="card"><div class="label">SPEED GEAR · SELECTED <b id="selectedGear">1</b></div><div class="row gears"><button data-gear="1">1</button><button data-gear="2">2</button><button data-gear="3">3</button><button data-gear="4">4</button><button data-gear="5">5</button></div><button id="offBtn" class="off">THROTTLE OFF</button></section>
-<section class="card"><button id="brakeBtn" class="red brake">HOLD TO BRAKE</button><div class="hint">Brake press stops traction immediately; release returns brake to 0° while armed</div></section>
+<section class="card"><button id="brakeBtn" class="red brake">HOLD TO BRAKE</button><div id="brakeMagnetBadge" class="magnet-badge">BRAKE ENCODER · CHECKING MAGNET</div><div class="hint">Brake press targets encoder +7°; release targets encoder 0° while armed</div></section>
 <section class="card"><div class="label">LIVE FEEDBACK</div><div class="telemetry"><div class="tile"><span>DRIVE</span><b id="driveState">STOPPED</b></div><div class="tile"><span>OUTPUT / TARGET</span><b><i id="voltage">0.00 V</i> / <i id="targetVoltage">0.00 V</i></b></div><div class="tile"><span>STEERING COMMAND</span><b><i id="steerNow">0.0°</i> → <i id="steerTarget">0.0°</i></b></div><div class="tile"><span>STEERING ENCODER</span><b><i id="steerDirection">CENTER</i> · <i id="steerPosition">0.0°</i></b></div><div class="tile"><span>BLDC / AXLE RPM</span><b><i id="bldcRpm">0</i> / <i id="axleRpm">0</i></b></div><div class="tile"><span>SPEED</span><b id="speed">0.00 km/h</b></div><div class="tile"><span>FULL MOTOR TURNS</span><b id="fullTurns">0</b></div><div class="tile"><span>MOTOR REVOLUTIONS</span><b id="motorRevs">0.00</b></div><div class="tile"><span>DISTANCE TRAVELLED</span><b id="distance">0.000 m</b></div><div class="tile"><span>SIGNED DISPLACEMENT</span><b id="displacement">0.000 m</b></div><div class="tile wide"><span>BRAKE ENCODER</span><b><i id="brakeState">APPLIED</i> · <i id="brakeAngle">45.0°</i> → <i id="brakeTarget">45.0°</i></b><div class="sensors">Magnet <b id="brakeMagnet" class="pass">OK</b> · validation <b id="brakeValidation">MOVING</b> · error <b id="brakeError">0.00°</b> · transition <b id="brakeTime">0 ms</b></div></div></div><div class="sensors">Encoder zero: <b id="encoderZeroState">INITIALIZING</b><br>Steering AS5600: <b id="steerDetail">checking</b> · errors <b id="steerErrors">0</b><br>BLDC AS5047P: <b id="bldcEnc">checking</b> · raw/errors <b id="bldcDetail">--</b><br>GP8630N: <b id="gpState">checking</b></div></section>
 <div id="message" class="message" role="status" aria-live="polite">Connecting…</div><button id="emergencyBtn" class="red stop">EMERGENCY STOP</button>
 </main><script>
@@ -695,13 +854,14 @@ async function send(path,quiet=false){if(!quiet)note('COMMANDING…');try{const 
 function command(path,el){feedback(el);return send(path)}
 function drive(dir,el){command('/drive?d='+dir,el)}
 function gear(n,el){command('/gear?n='+n,el)}
-function steerStart(e,dir){e.preventDefault();const el=e.currentTarget;if(el.disabled||steerHeld)return;if(e.pointerId!==undefined&&el.setPointerCapture)try{el.setPointerCapture(e.pointerId)}catch(_){}steerHeld=dir;el.classList.add('pressed');feedback();send('/steer_hold?d='+dir);steerTimer=setInterval(()=>send('/steer_hold?d='+dir,true),180)}
-function steerStop(e){if(!steerHeld)return;if(e)e.preventDefault();clearInterval(steerTimer);steerTimer=null;const id=steerHeld==='LEFT'?'leftBtn':'rightBtn';$(id).classList.remove('pressed');steerHeld=null;send('/steer_hold?d=STOP')}
+function steerStart(e,dir){e.preventDefault();const el=e.currentTarget;if(el.disabled)return;command('/steer?v='+(dir==='LEFT'?-25:25),el)}
+function steerStop(e){if(e)e.preventDefault()}
 function brakeDown(e){e.preventDefault();const b=$('brakeBtn');if(b.disabled||brakeHeld)return;if(e.pointerId!==undefined&&b.setPointerCapture)try{b.setPointerCapture(e.pointerId)}catch(_){}brakeHeld=true;b.classList.add('pressed');feedback();send('/brake?s=apply')}
 function brakeUp(e){if(!brakeHeld)return;if(e)e.preventDefault();brakeHeld=false;$('brakeBtn').classList.remove('pressed');send('/brake?s=release')}
-$('armBtn').onclick=e=>command('/arm',e.currentTarget);$('disarmBtn').onclick=e=>command('/disarm',e.currentTarget);$('zeroEncodersBtn').onclick=e=>command('/zero_encoders',e.currentTarget);$('emergencyBtn').onclick=e=>command('/disarm',e.currentTarget);$('forward').onclick=e=>drive('FORWARD',e.currentTarget);$('reverse').onclick=e=>drive('REVERSE',e.currentTarget);$('centerBtn').onclick=e=>command('/steer?v=0',e.currentTarget);$('offBtn').onclick=e=>gear(0,e.currentTarget);document.querySelectorAll('[data-gear]').forEach(b=>b.onclick=()=>gear(Number(b.dataset.gear),b));['leftBtn','rightBtn'].forEach(id=>{const b=$(id),dir=id==='leftBtn'?'LEFT':'RIGHT';b.addEventListener('pointerdown',e=>steerStart(e,dir));['pointerup','pointercancel','lostpointercapture'].forEach(x=>b.addEventListener(x,steerStop))});$('brakeBtn').addEventListener('pointerdown',brakeDown);['pointerup','pointercancel','lostpointercapture'].forEach(x=>$('brakeBtn').addEventListener(x,brakeUp));addEventListener('blur',()=>{steerStop();brakeUp()});addEventListener('pagehide',()=>navigator.sendBeacon('/soft_stop'));
+$('armBtn').onclick=e=>command('/arm',e.currentTarget);$('disarmBtn').onclick=e=>command('/disarm',e.currentTarget);$('zeroSteerBtn').onclick=e=>command('/zero_steering',e.currentTarget);$('zeroBrakeBtn').onclick=e=>command('/zero_brake',e.currentTarget);$('emergencyBtn').onclick=e=>command('/disarm',e.currentTarget);$('forward').onclick=e=>drive('FORWARD',e.currentTarget);$('reverse').onclick=e=>drive('REVERSE',e.currentTarget);$('centerBtn').onclick=e=>command('/steer?v=0',e.currentTarget);$('offBtn').onclick=e=>gear(0,e.currentTarget);document.querySelectorAll('[data-gear]').forEach(b=>b.onclick=()=>gear(Number(b.dataset.gear),b));['leftBtn','rightBtn'].forEach(id=>{const b=$(id),dir=id==='leftBtn'?'LEFT':'RIGHT';b.addEventListener('pointerdown',e=>steerStart(e,dir));['pointerup','pointercancel','lostpointercapture'].forEach(x=>b.addEventListener(x,steerStop))});$('brakeBtn').addEventListener('pointerdown',brakeDown);['pointerup','pointercancel','lostpointercapture'].forEach(x=>$('brakeBtn').addEventListener(x,brakeUp));addEventListener('blur',()=>{steerStop();brakeUp()});addEventListener('pagehide',()=>navigator.sendBeacon('/soft_stop'));
 addEventListener('keydown',e=>{if(e.repeat)return;if(e.key==='ArrowLeft')steerStart({preventDefault(){},currentTarget:$('leftBtn'),pointerId:0},'LEFT');else if(e.key==='ArrowRight')steerStart({preventDefault(){},currentTarget:$('rightBtn'),pointerId:0},'RIGHT');else if(e.key==='ArrowUp')drive('FORWARD',$('forward'));else if(e.key==='ArrowDown')drive('REVERSE',$('reverse'));else if(e.code==='Space')brakeDown({preventDefault(){},pointerId:0})});addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight')steerStop();if(e.code==='Space')brakeUp()});
 async function update(){try{const r=await fetch('/status',{cache:'no-store'});if(!r.ok)throw Error();const s=await r.json();latest=s;const busy=s.brake_state==='APPLYING'||s.brake_state==='RELEASING';$('armed').textContent=s.armed?(busy?'ARMING':'ARMED'):'DISARMED';$('armed').classList.toggle('on',s.armed&&!busy);$('armed').classList.toggle('busy',busy);$('armBtn').disabled=s.armed;$('disarmBtn').disabled=!s.armed&&!busy;$('zeroEncodersBtn').disabled=s.armed||s.voltage>.01;const driveDisabled=!s.armed||s.brake_state!=='RELEASED'||!s.gp_online;$('forward').disabled=driveDisabled;$('reverse').disabled=driveDisabled;$('leftBtn').disabled=!s.armed;$('centerBtn').disabled=!s.armed;$('rightBtn').disabled=!s.armed;$('brakeBtn').disabled=!s.armed;$('brakeBtn').textContent=s.armed?'HOLD TO BRAKE':'BRAKE APPLIED';$('forward').classList.toggle('active',s.direction==='FORWARD'&&s.drive_state!=='STOPPED');$('reverse').classList.toggle('active',s.direction==='REVERSE'&&s.drive_state!=='STOPPED');$('leftBtn').classList.toggle('active',s.steer_hold==='LEFT');$('rightBtn').classList.toggle('active',s.steer_hold==='RIGHT');$('centerBtn').classList.toggle('active',Math.abs(s.steer_target)<=.5&&s.steer_hold==='STOP');document.querySelectorAll('[data-gear]').forEach(b=>b.classList.toggle('active',s.selected_gear===Number(b.dataset.gear)));$('selectedGear').textContent=s.selected_gear;$('voltage').textContent=s.voltage.toFixed(2)+' V';$('targetVoltage').textContent=s.target_voltage.toFixed(2)+' V';$('driveState').textContent=s.drive_state;$('steerNow').textContent=s.steer_command.toFixed(1)+'°';$('steerTarget').textContent=s.steer_target.toFixed(1)+'°';$('steerDirection').textContent=s.steer_direction;$('steerPosition').textContent=(s.steer_angle>0?'+':'')+s.steer_angle.toFixed(1)+'°';$('brakeState').textContent=s.brake_state;$('brakeAngle').textContent=s.brake_encoder_angle.toFixed(1)+'°';$('brakeTarget').textContent=s.brake_encoder_target.toFixed(1)+'°';$('brakeMagnet').textContent=s.brake_encoder_magnet;$('brakeValidation').textContent=s.brake_validation;$('brakeValidation').className=s.brake_validation==='PASS'?'pass':s.brake_validation==='FAIL'?'bad':'warn';$('brakeError').textContent=s.brake_error.toFixed(2)+'°';$('brakeTime').textContent=s.brake_transition_ms+' ms';$('bldcRpm').textContent=Math.abs(s.bldc_rpm).toFixed(0);$('axleRpm').textContent=Math.abs(s.axle_rpm).toFixed(0);$('speed').textContent=s.speed_kmh.toFixed(2)+' km/h';$('fullTurns').textContent=s.full_turns;$('motorRevs').textContent=s.motor_revolutions.toFixed(2);$('distance').textContent=s.distance_m.toFixed(3)+' m';$('displacement').textContent=s.displacement_m.toFixed(3)+' m';$('encoderZeroState').textContent=s.encoders_initialized?'READY':'WAITING FOR VALID MAGNETS';$('encoderZeroState').className=s.encoders_initialized?'pass':'warn';$('steerDetail').textContent=s.steer_online?s.steer_angle.toFixed(1)+'° '+s.steer_direction+' / '+s.steer_magnet:s.steer_magnet;$('steerErrors').textContent=s.steer_errors;$('bldcEnc').textContent=s.bldc_online?s.bldc_angle.toFixed(1)+'° / '+s.bldc_magnet:s.bldc_magnet;$('bldcDetail').textContent=s.bldc_raw+'/'+s.bldc_errors;$('gpState').textContent=s.gp_online?'ONLINE':'OFFLINE'}catch(e){note('CONTROLLER OFFLINE','bad')}}setInterval(update,200);update();
+setInterval(()=>{if(!latest)return;const moving=latest.voltage>.01;$('zeroSteerBtn').disabled=moving;$('zeroBrakeBtn').disabled=moving||latest.brake_state!=='RELEASED';$('leftBtn').classList.toggle('active',latest.steer_target<-.5);$('rightBtn').classList.toggle('active',latest.steer_target>.5);$('centerBtn').classList.toggle('active',Math.abs(latest.steer_target)<=.5);const m=latest.brake_encoder_magnet,b=$('brakeMagnetBadge');b.textContent='BRAKE ENCODER · MAGNET '+m;b.className='magnet-badge '+(m==='OK'?'ok':(m==='TOO WEAK'||m==='TOO STRONG')?'weak':'fault');const ready=latest.steer_initialized&&latest.brake_encoder_initialized;$('encoderZeroState').textContent=ready?'FEEDBACK READY':'OPTIONAL · OPEN LOOP';$('encoderZeroState').className=ready?'pass':'warn'},200);
 </script></body></html>'''
 
 
@@ -801,9 +961,10 @@ server.settimeout(0)
 print("AUTOKART FULL RC READY")
 print("Wi-Fi:", SSID, "Password:", PASSWORD)
 print("Open: http://" + ap.ifconfig()[0])
-print("PCA I2C(0) SDA1/SCL2:", [hex(item) for item in pca_i2c_devices])
+print("STEERING I2C(0) SDA1/SCL2:", [hex(item) for item in steering_i2c_devices])
+print("BRAKE SoftI2C SDA35/SCL36:", [hex(item) for item in brake_i2c_devices])
 print("GP I2C(1) SDA7/SCL21:", [hex(item) for item in gp_i2c_devices])
-print("Encoder zeroing: automatic on first valid readings")
+print("Encoder feedback: optional; zero buttons enable closed-loop correction")
 
 try:
     while True:
@@ -844,13 +1005,29 @@ try:
                 reply(client, json_status(), content_type="application/json; charset=utf-8")
             elif path.startswith("/arm"):
                 arm_controller()
-                reply(client, "ARMED; BRAKES RELEASING")
+                reply(client, "ARMED; BRAKE RETURNING TO 0 DEG")
             elif path.startswith("/soft_stop"):
                 request_soft_stop()
                 reply(client, "THROTTLE RAMPING TO ZERO")
             elif path.startswith("/disarm"):
                 disarm_controller("REMOTE")
-                reply(client, "DISARMED; BRAKES APPLYING")
+                reply(client, "DISARMED; BRAKE TARGETING ENCODER +7 DEG")
+            elif path.startswith("/zero_steering"):
+                if throttle_command > 0.01:
+                    reply(client, "STOP THROTTLE BEFORE ZEROING", "409 Conflict")
+                elif zero_steering_encoder():
+                    reply(client, "STEERING ENCODER ZEROED AT CENTER")
+                else:
+                    reply(client, "STEERING ENCODER / MAGNET NOT READY", "409 Conflict")
+            elif path.startswith("/zero_brake"):
+                if throttle_command > 0.01:
+                    reply(client, "STOP THROTTLE BEFORE ZEROING", "409 Conflict")
+                elif brake_state != "RELEASED":
+                    reply(client, "ARM AND WAIT FOR BRAKE RELEASE", "409 Conflict")
+                elif zero_brake_encoder():
+                    reply(client, "BRAKE ENCODER ZEROED AT RELEASED POSITION")
+                else:
+                    reply(client, "BRAKE ENCODER / MAGNET NOT READY", "409 Conflict")
             elif path.startswith("/zero_encoders"):
                 if armed or throttle_command > 0.01:
                     reply(client, "DISARM AND STOP BEFORE ZEROING", "409 Conflict")
@@ -877,7 +1054,14 @@ try:
                         -STEER_LIMIT_DEG, STEER_LIMIT_DEG,
                     )
                     steer_hold_direction = "STOP"
-                    steering.set_target(requested)
+                    steer_encoder_target_deg = requested
+                    current = (
+                        steer_encoder["angle"]
+                        if steer_encoder["initialized"] else 0.0
+                    )
+                    steering.command_target(
+                        requested, abs(requested - current) + 15.0
+                    )
                     last_contact_ms = time.ticks_ms()
                     reply(client, "STEERING CENTER" if requested == 0 else
                           "STEERING {:.0f} DEG".format(requested))
@@ -927,7 +1111,7 @@ try:
                     apply_brakes()
                     if armed:
                         last_contact_ms = time.ticks_ms()
-                    reply(client, "BRAKES APPLYING TO 45 DEG")
+                    reply(client, "BRAKES TARGETING ENCODER +7 DEG")
             else:
                 reply(client, "NOT FOUND", "404 Not Found")
         except Exception as error:

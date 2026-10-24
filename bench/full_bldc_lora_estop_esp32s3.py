@@ -21,8 +21,8 @@ from ra02_lora_chat_common import SX1278
 
 
 # -------------------- BLD-750 / GP8630N --------------------
-SDA_PIN = 8
-SCL_PIN = 9
+SDA_PIN = 7
+SCL_PIN = 21
 GP_ADDR = 0x58
 REG_MODE = 0x01
 REG_DAC = 0x02
@@ -213,7 +213,7 @@ enable_stop()
 brake_apply()
 direction_cw()
 
-i2c = I2C(0, sda=Pin(SDA_PIN), scl=Pin(SCL_PIN), freq=100000)
+i2c = I2C(1, sda=Pin(SDA_PIN), scl=Pin(SCL_PIN), freq=100000)
 if GP_ADDR not in i2c.scan():
     raise RuntimeError("GP8630N NOT FOUND AT 0x58")
 i2c.writeto_mem(GP_ADDR, REG_MODE, bytes((MODE_0_10V,)))
