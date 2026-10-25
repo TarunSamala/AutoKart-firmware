@@ -1,0 +1,15 @@
+# Python/runtime artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated release bundles and archives
+dist/
+*.zip
+*.tar.gz
+
+# Board images are reproducible/downloaded artifacts, not source
+*.bin
+
+# Hardware validation outputs are local evidence, not portable source
+log/*_latest.json
