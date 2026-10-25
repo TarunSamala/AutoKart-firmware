@@ -57,15 +57,25 @@ COUNTS_PER_REV = 16384
 
 # Bench limits and timing.
 MAX_VOLTAGE = 5.0
+BLUE_CONE_TEST_VOLTAGE = 0.5
 RAMP_STEP_V = 0.08
 RAMP_INTERVAL_MS = 35
 ENCODER_INTERVAL_MS = 5
 DIAGNOSTIC_INTERVAL_MS = 100
-CONTROL_LINK_TIMEOUT_MS = 5000
+# The normal profile is fail-closed: loss of HTTP traffic locks the wheel in
+# under one second. A dedicated WHEELS-OFF blue-cone visualization test may
+# override this through :bldc_bench_config.py without weakening the default.
+try:
+    import bldc_bench_config
+    CONTROL_LINK_TIMEOUT_MS = int(getattr(
+        bldc_bench_config, "CONTROL_LINK_TIMEOUT_MS", 750
+    ))
+except ImportError:
+    CONTROL_LINK_TIMEOUT_MS = 750
 ENCODER_STALE_MS = 500
 MAX_VALID_RPM = 6000.0
 RPM_TIME_CONSTANT_S = 0.030
-NOISE_COUNTS = 2
+NOISE_COUNTS = 8
 
 # Encoder magnet is on 14T sprocket; 44T sprocket is fixed to rear axle.
 MOTOR_REVS_PER_AXLE_REV = 44.0 / 14.0
@@ -328,6 +338,7 @@ def zero_encoder():
         relative_deg=0.0, rpm=0.0, axle_rpm=0.0, signed_counts=0,
         travel_counts=0, motor_revs=0.0, full_turns=0,
         distance_m=0.0, displacement_m=0.0, speed_kmh=0.0,
+        errors=0,
     )
 
 
@@ -396,6 +407,20 @@ def arm_controller():
     armed = True
     drive_state = "ARMED AT 0 V"
     print("ARMED AT 0 V")
+
+
+def start_blue_cone_test():
+    """Atomically zero, arm and start forward at the fixed 0.5 V test level."""
+    global selected_gear
+    if not gp_online:
+        raise RuntimeError("GP8630N OFFLINE")
+    if not encoder_ready():
+        raise RuntimeError("AS5047P NOT READY")
+    if not armed:
+        zero_encoder()
+        arm_controller()
+    selected_gear = BLUE_CONE_TEST_VOLTAGE
+    request_drive("FORWARD")
 
 
 def service_traction():
@@ -502,7 +527,7 @@ def json_status():
         '"direction":"{}","requested_direction":"{}",'
         '"drive_state":"{}","gear":{},"selected_gear":{},'
         '"voltage":{:.2f},"target_voltage":{:.2f},"gp_online":{},'
-        '"link_timeout":{},'
+        '"link_timeout":{},"control_link_timeout_ms":{},'
         '"encoder_ready":{},"magnet":"{}","raw":{},'
         '"absolute_deg":{:.3f},"relative_deg":{:.3f},'
         '"rpm":{:.2f},"axle_rpm":{:.2f},"motor_revs":{:.5f},'
@@ -514,7 +539,7 @@ def json_status():
         direction, requested_direction,
         drive_state, gear, selected_gear,
         current_voltage, target_voltage, str(gp_online).lower(),
-        str(link_timeout_active).lower(),
+        str(link_timeout_active).lower(), CONTROL_LINK_TIMEOUT_MS,
         str(encoder_ready()).lower(), encoder["magnet"], encoder["raw"],
         encoder["absolute_deg"], encoder["relative_deg"], encoder["rpm"],
         encoder["axle_rpm"], encoder["motor_revs"], encoder["full_turns"],
@@ -549,11 +574,12 @@ try:
         service_traction()
 
         if (
-            armed and not link_timeout_active
+            CONTROL_LINK_TIMEOUT_MS > 0
+            and armed and not link_timeout_active
             and time.ticks_diff(time.ticks_ms(), last_command_ms)
             > CONTROL_LINK_TIMEOUT_MS
         ):
-            request_soft_stop("CONTROL LINK TIMEOUT")
+            lock_wheel("CONTROL LINK TIMEOUT")
             link_timeout_active = True
 
         try:
@@ -580,6 +606,19 @@ try:
                 else:
                     arm_controller()
                     reply(client, "ARMED AT 0 V")
+            elif path.startswith("/test_start"):
+                if CONTROL_LINK_TIMEOUT_MS != 0:
+                    reply(client, "INSTALL BLUE-CONE NO-HEARTBEAT PROFILE", "409 Conflict")
+                elif armed and target_voltage > 0.0:
+                    reply(client, "BLUE-CONE TEST ALREADY RUNNING AT {:.2f} V".format(
+                        target_voltage
+                    ))
+                else:
+                    try:
+                        start_blue_cone_test()
+                        reply(client, "BLUE-CONE TEST STARTED: FORWARD 0.50 V")
+                    except RuntimeError as error:
+                        reply(client, str(error), "409 Conflict")
             elif path.startswith("/soft_stop"):
                 request_soft_stop()
                 reply(client, "THROTTLE RAMPING TO ZERO")
