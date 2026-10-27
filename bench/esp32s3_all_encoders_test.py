@@ -1,17 +1,17 @@
 """Isolated AutoKart encoder test for the YD ESP32-S3.
 
-Reads only:
+Reads the two encoders in the frozen vehicle architecture:
   - steering AS5600 directly on hardware I2C(0), GPIO1/GPIO2
-  - brake AS5600 directly on SoftI2C, GPIO35/GPIO36
   - BLDC AS5047P over SPI mode 1
+
+There is no brake encoder. GPIO35/GPIO36 are unavailable on ESP32-S3 N16R8
+modules using octal PSRAM and must not be initialized by this test.
 
 No actuator, GP8630N, BLD750, motor-driver, LoRa, or Wi-Fi pin is initialized.
 
 Frozen wiring:
   ESP32 GPIO1  -> steering AS5600 SDA
   ESP32 GPIO2  -> steering AS5600 SCL
-  ESP32 GPIO35 -> brake AS5600 SDA
-  ESP32 GPIO36 -> brake AS5600 SCL
   ESP32 GPIO16 -> AS5047P CS
   ESP32 GPIO18 -> AS5047P CLK
   ESP32 GPIO41 -> AS5047P MOSI
@@ -20,11 +20,11 @@ Frozen wiring:
 All modules use ESP32 3V3 and a common GND. The PCA9548A is not connected.
 AS5047P W/PWM and I/PWM remain disconnected.
 
-Commands: read, stream, zero steering, zero brake, zero bldc, clear steering,
-clear brake, status, help, q.
+Commands: read, stream, zero steering, zero bldc, clear steering, status,
+help, q.
 """
 
-from machine import I2C, Pin, SoftI2C, SPI
+from machine import I2C, Pin, SPI
 import math
 import os
 import time
@@ -34,8 +34,6 @@ import time
 # cannot conflict because they are on different physical SDA/SCL pairs.
 STEERING_SDA_GPIO = 1
 STEERING_SCL_GPIO = 2
-BRAKE_SDA_GPIO = 35
-BRAKE_SCL_GPIO = 36
 AS5600_ADDRESS = 0x36
 
 AS5047_CS_GPIO = 16
@@ -49,7 +47,6 @@ SAMPLE_INTERVAL_MS = 10       # combined three-encoder acquisition target: 100 H
 DISPLAY_INTERVAL_MS = 250     # terminal update rate: 4 Hz
 
 STEERING_ZERO_FILE = "steering_as5600_zero.txt"
-BRAKE_ZERO_FILE = "brake_as5600_zero.txt"
 
 AS5600_COUNTS = 4096
 AS5047_COUNTS = 16384
@@ -60,11 +57,9 @@ AS5047_MAX_MOTOR_RPM = 6000.0
 # adding to turns/distance. At 14 bits, 8 counts is only about 0.176 degrees.
 AS5047_POSITION_DEADBAND_COUNTS = 8
 
-# Frozen sign convention: steering right is positive; clockwise brake
-# application is positive. Change one sign to -1 only if the corresponding
-# mounted encoder is observed counting in the opposite direction.
+# Frozen sign convention: steering right is positive. Change the sign to -1
+# only if the mounted steering encoder counts in the opposite direction.
 STEERING_DIRECTION_SIGN = 1
-BRAKE_CLOCKWISE_SIGN = 1
 
 # Preliminary drivetrain values. Distance remains nominal until loaded tyre
 # circumference is measured on the kart.
@@ -288,11 +283,6 @@ steering_i2c = I2C(
     scl=Pin(STEERING_SCL_GPIO),
     freq=I2C_FREQUENCY,
 )
-brake_i2c = SoftI2C(
-    sda=Pin(BRAKE_SDA_GPIO),
-    scl=Pin(BRAKE_SCL_GPIO),
-    freq=I2C_FREQUENCY,
-)
 spi = SPI(
     1, baudrate=SPI_FREQUENCY, polarity=0, phase=1, bits=8,
     firstbit=SPI.MSB, sck=Pin(AS5047_SCK_GPIO),
@@ -303,13 +293,9 @@ as5047_cs = Pin(AS5047_CS_GPIO, Pin.OUT, value=1)
 steering_filter = AS5600Filter(
     load_zero(STEERING_ZERO_FILE), direction=STEERING_DIRECTION_SIGN
 )
-brake_filter = AS5600Filter(
-    load_zero(BRAKE_ZERO_FILE), direction=BRAKE_CLOCKWISE_SIGN
-)
 bldc_filter = BLDCFilter()
 
 steering_sample = None
-brake_sample = None
 bldc_sample = None
 bldc_values = None
 
@@ -446,17 +432,12 @@ def failed_sample(error):
 
 
 def acquire_all():
-    global steering_sample, brake_sample, bldc_sample, bldc_values
+    global steering_sample, bldc_sample, bldc_values
     try:
         steering_sample = read_as5600(steering_i2c, steering_filter)
     except Exception as error:
         steering_filter.rejected_samples += 1
         steering_sample = failed_sample(error)
-    try:
-        brake_sample = read_as5600(brake_i2c, brake_filter)
-    except Exception as error:
-        brake_filter.rejected_samples += 1
-        brake_sample = failed_sample(error)
     try:
         bldc_sample = read_as5047()
         if bldc_sample["values"] is not None:
@@ -490,7 +471,6 @@ def print_as5600(name, sample, angle_filter):
 
 def print_all():
     print_as5600("STEERING I2C0 ", steering_sample, steering_filter)
-    print_as5600("BRAKE    SOFT ", brake_sample, brake_filter)
     if bldc_sample is None:
         print("BLDC AS5047P: NO SAMPLE")
         return
@@ -549,12 +529,9 @@ def validate_direct_bus(bus, name):
 
 def zero_as5600(name):
     collect(200)
-    if name == "steering":
-        sample, angle_filter, filename = (
-            steering_sample, steering_filter, STEERING_ZERO_FILE
-        )
-    else:
-        sample, angle_filter, filename = brake_sample, brake_filter, BRAKE_ZERO_FILE
+    sample, angle_filter, filename = (
+        steering_sample, steering_filter, STEERING_ZERO_FILE
+    )
     if sample is None or not sample["online"] or sample["magnet"] != "MAGNET OK":
         print("ZERO REJECTED: {} encoder/magnet is not healthy".format(name))
         return
@@ -565,10 +542,7 @@ def zero_as5600(name):
 
 
 def clear_as5600(name):
-    if name == "steering":
-        angle_filter, filename = steering_filter, STEERING_ZERO_FILE
-    else:
-        angle_filter, filename = brake_filter, BRAKE_ZERO_FILE
+    angle_filter, filename = steering_filter, STEERING_ZERO_FILE
     angle_filter.clear()
     remove_zero(filename)
     print(name.upper() + " zero cleared")
@@ -576,12 +550,11 @@ def clear_as5600(name):
 
 def show_status():
     print("Steering I2C0: SDA GPIO1, SCL GPIO2, 100 kHz, address 0x36")
-    print("Brake SoftI2C: SDA GPIO35, SCL GPIO36, 100 kHz, address 0x36")
+    print("Brake encoder: NOT USED (GPIO35/GPIO36 reserved by N16R8 octal PSRAM)")
     print("PCA9548A: NOT USED")
     print("AS5047P SPI1: CS16 SCK18 MOSI41 MISO42, mode 1, 1 MHz")
     print("AS5600 filter: median 3 + 10 ms LPF | combined sample target 100 Hz")
     print("AS5047P filter: 30 ms RPM LPF | stationary position window +/-8 counts")
-    print("Brake expected after zero: RELEASED 0 deg, APPLIED clockwise +7 deg")
     print("Distance uses nominal 11-inch tyre and 14T:44T ratio; not calibrated")
     print_all()
 
@@ -591,10 +564,8 @@ def show_help():
     print("  read / r        sample for 1 second and show all encoders")
     print("  stream          live filtered output; Ctrl-C returns to prompt")
     print("  zero steering   save current steering position as 0 degrees")
-    print("  zero brake      save current released-brake position as 0 degrees")
     print("  zero bldc       reset BLDC turns, RPM and distance counters")
     print("  clear steering  remove saved steering zero")
-    print("  clear brake     remove saved brake zero")
     print("  status          show wiring, filters and latest readings")
     print("  help            show commands")
     print("  q               stop")
@@ -602,11 +573,10 @@ def show_help():
 
 print()
 print("================================================")
-print(" AUTOKART ESP32-S3 ALL ENCODERS ISOLATED TEST")
+print(" AUTOKART ESP32-S3 VEHICLE ENCODERS ISOLATED TEST")
 print("================================================")
 print("ENCODER ONLY: NO ACTUATOR OUTPUTS ARE INITIALIZED")
 validate_direct_bus(steering_i2c, "Steering AS5600 GPIO1/GPIO2")
-validate_direct_bus(brake_i2c, "Brake AS5600 GPIO35/GPIO36")
 
 collect(300)
 show_status()
@@ -628,8 +598,6 @@ while True:
                 print("Streaming stopped.")
         elif command == "zero steering":
             zero_as5600("steering")
-        elif command == "zero brake":
-            zero_as5600("brake")
         elif command in ("zero bldc", "reset bldc"):
             bldc_filter.reset()
             bldc_values = None
@@ -637,8 +605,6 @@ while True:
             print("BLDC turns, RPM and distance reset")
         elif command == "clear steering":
             clear_as5600("steering")
-        elif command == "clear brake":
-            clear_as5600("brake")
         elif command == "status":
             collect(300)
             show_status()
