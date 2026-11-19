@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AutoKart Connections and Electrical Wiring</title>
+  <style>
+    @page { size: A4; margin: 15mm 14mm 16mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #142521; background: #fff; font-family: "Liberation Sans", Arial, sans-serif; font-size: 10pt; line-height: 1.34; }
+    .page { page-break-after: always; min-height: 250mm; position: relative; }
+    .page:last-child { page-break-after: auto; }
+    h1, h2, h3 { margin: 0; color: #0c3831; }
+    h1 { font-size: 30pt; line-height: 1.08; letter-spacing: -0.5pt; }
+    h2 { font-size: 20pt; border-bottom: 2px solid #0a7b68; padding-bottom: 4mm; margin-bottom: 5mm; }
+    h3 { font-size: 12pt; margin: 5mm 0 2mm; }
+    p { margin: 2mm 0 3mm; }
+    ul, ol { margin: 2mm 0 3mm 6mm; padding-left: 5mm; }
+    li { margin: 1mm 0; }
+    .eyebrow { color: #0a7b68; font-size: 9pt; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; }
+    .subtitle { margin-top: 5mm; color: #48605a; font-size: 15pt; line-height: 1.35; max-width: 150mm; }
+    .cover { padding-top: 28mm; }
+    .cover-band { margin-top: 16mm; padding: 9mm; background: #e9f3f0; border-left: 4mm solid #0a7b68; }
+    .cover-meta { margin-top: 16mm; display: table; width: 100%; border-collapse: collapse; }
+    .cover-meta div { display: table-cell; width: 33.3%; padding: 5mm; border: 1px solid #b8cbc6; vertical-align: top; }
+    .label { color: #5c716c; font-size: 8pt; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+    .value { margin-top: 1mm; font-size: 11pt; font-weight: 700; }
+    .footer { position: absolute; bottom: 0; left: 0; right: 0; padding-top: 2mm; border-top: 1px solid #c8d5d1; color: #64766f; font-size: 7.5pt; display: flex; justify-content: space-between; }
+    .callout { margin: 4mm 0; padding: 4mm 5mm; border-left: 3mm solid #0a7b68; background: #edf6f4; }
+    .callout.warn { border-color: #df8b00; background: #fff6e7; }
+    .callout.danger { border-color: #c8322b; background: #fff0ef; }
+    .callout strong { color: #163d36; }
+    .grid2 { display: table; width: 100%; border-collapse: separate; border-spacing: 4mm 0; margin-left: -4mm; }
+    .grid2 > div { display: table-cell; width: 50%; vertical-align: top; }
+    .card { border: 1px solid #c3d2ce; border-radius: 2mm; padding: 4mm; background: #fbfdfc; margin-bottom: 4mm; }
+    .card h3 { margin-top: 0; color: #0a6f60; }
+    table { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm; font-size: 8.5pt; }
+    th { background: #dfece8; color: #173d36; text-align: left; font-weight: 700; }
+    th, td { border: 1px solid #b8cbc6; padding: 2.2mm 2.5mm; vertical-align: top; }
+    tr:nth-child(even) td { background: #f7faf9; }
+    .compact th, .compact td { padding: 1.4mm 2mm; }
+    .status-ok { color: #08735f; font-weight: 700; }
+    .status-hold { color: #a06200; font-weight: 700; }
+    .status-no { color: #b4231c; font-weight: 700; }
+    .diagram { width: 100%; border: 1px solid #c3d2ce; background: #f8fbfa; padding: 2mm; margin: 3mm 0 5mm; }
+    .small { font-size: 8.5pt; color: #526862; }
+    .mono { font-family: "Liberation Mono", monospace; font-size: 8.5pt; }
+    .pill { display: inline-block; padding: 1mm 2.5mm; margin: 0 1mm 1mm 0; border: 1px solid #0a7b68; border-radius: 6mm; color: #075e52; background: #eef8f5; font-size: 8pt; font-weight: 700; }
+    .rule { height: 1px; background: #c8d5d1; margin: 4mm 0; }
+    .toc td:first-child { width: 18mm; color: #0a7b68; font-weight: 700; }
+    .check td:first-child { width: 10mm; text-align: center; font-size: 12pt; }
+    .truth td:first-child, .truth th:first-child { width: 22mm; }
+    a { color: #066b5d; text-decoration: none; }
+    .source { font-size: 7.8pt; word-break: break-all; }
+  </style>
+</head>
+<body>
+
+<section class="page cover">
+  <div class="eyebrow">AutoKart / Electrical Integration Baseline</div>
+  <h1>Connections &amp;<br>Electrical Wiring</h1>
+  <div class="subtitle">A buildable wiring reference for the Jetson Orin Nano Super, ESP32-S3 VCU, traction, steering, mechanical brake, remote stop and dashboard network.</div>
+
+  <div class="cover-band">
+    <b>Corrected vehicle configuration</b><br>
+    NVIDIA Jetson Orin Nano Super 8 GB · ESP32-S3 N16R8 · RP2040 Pico emergency transmitter · HP60C RGB-D camera · BLD-750 traction controller · BM860 steering driver · TB6600 brake driver · AS5600 steering feedback · AS5047P BLDC/axle feedback · WR850N dashboard router.
+  </div>
+
+  <div class="cover-meta">
+    <div><span class="label">Revision</span><div class="value">1.0 — corrected baseline</div></div>
+    <div><span class="label">Date</span><div class="value">19 November 2026</div></div>
+    <div><span class="label">Power domains</span><div class="value">48 V + 12 V batteries</div></div>
+  </div>
+
+  <div class="callout danger" style="margin-top:18mm">
+    <strong>Engineering document — not a vehicle safety certification.</strong> Fuse, cable, buck-converter and contactor ratings must be selected from measured current, inrush, short-circuit capability, temperature and the installed nameplates. Perform first power-up with wheels raised, guarded and an independent power cut within reach.
+  </div>
+  <div class="footer"><span>AutoKart Connections &amp; Electrical Wiring</span><span>Controlled copy: verify revision before wiring</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">Document control</div>
+  <h2>Scope, corrections and contents</h2>
+
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <h3>Included</h3>
+        <ul>
+          <li>Two-battery power distribution and low-voltage conversion.</li>
+          <li>Hardwired ON/OFF and DC contactor control chain.</li>
+          <li>Jetson, ESP32-S3, camera and WR850N network connections.</li>
+          <li>Traction, steering and mechanical-brake control interfaces.</li>
+          <li>AS5600 and AS5047P feedback wiring.</li>
+          <li>RP2040 Pico + RA-02 supplementary wireless stop.</li>
+          <li>GPIO allocation, connector schedule and pre-power checks.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Explicitly not installed</h3>
+        <p><span class="pill">Raspberry Pi 4B</span><span class="pill">RPLiDAR A1M8</span><span class="pill">MPU6500 IMUs</span><span class="pill">brake encoder</span></p>
+        <p>The Jetson is the only main computer. The brake is presently open-loop STEP/DIR and has no confirmed AS5600 feedback.</p>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h3>Critical N16R8 correction</h3>
+        <p>The installed ESP32-S3 has 16 MB flash and 8 MB embedded octal PSRAM. On this variant, GPIO33–37 are consumed by the flash/PSRAM interface.</p>
+        <p class="status-no">GPIO35 and GPIO36 must not be wired to a brake AS5600.</p>
+        <p>This document marks those pins unavailable. If brake position feedback is added later, assign a new electrically valid interface and update firmware, pinout and validation records together.</p>
+      </div>
+      <div class="card">
+        <h3>Naming baseline</h3>
+        <table class="compact">
+          <tr><th>Item</th><th>Controlled name</th></tr>
+          <tr><td>Main computer</td><td>Jetson Orin Nano Super 8 GB</td></tr>
+          <tr><td>Steering driver</td><td>BM860 — verify exact nameplate</td></tr>
+          <tr><td>Router</td><td>TP-Link WR850N</td></tr>
+          <tr><td>Emergency controller</td><td>RP2040 Raspberry Pi Pico</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <h3>Contents</h3>
+  <table class="toc compact">
+    <tr><td>01</td><td>System architecture</td><td>Computers, sensors, VCU and actuators</td></tr>
+    <tr><td>02</td><td>Power architecture</td><td>48 V and 12 V domains, bucks and contactor</td></tr>
+    <tr><td>03</td><td>Hardwired safety chain</td><td>Series ON/OFF, NC stop and contactor coil</td></tr>
+    <tr><td>04</td><td>ESP32-S3 pinout</td><td>Current allocation and N16R8 exclusions</td></tr>
+    <tr><td>05–08</td><td>Subsystem wiring</td><td>Traction, steering, brake, LoRa and Jetson</td></tr>
+    <tr><td>09–11</td><td>Build and validation</td><td>Connectors, routing, checks and release gates</td></tr>
+  </table>
+  <div class="footer"><span>Scope and corrections</span><span>Page 2</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">01 / System architecture</div>
+  <h2>Control, sensing and independent stop paths</h2>
+  <img class="diagram" src="file:///home/satvara/Github/AutoKart-firmware/docs/electrical_wiring_assets/system-architecture.png" alt="AutoKart system architecture">
+
+  <div class="grid2">
+    <div class="card">
+      <h3>High-level computer</h3>
+      <p>The Jetson runs perception, cone-distance logic, the dashboard and mission decisions. It receives HP60C camera data over USB and exchanges commands/telemetry with the ESP32-S3 over USB serial at 115200 baud.</p>
+    </div>
+    <div class="card">
+      <h3>Vehicle control unit</h3>
+      <p>The ESP32-S3 performs local actuator I/O: STEP/DIR, DAC command, BLD-750 control inputs, encoder sampling and optional LoRa packet reception. A Jetson command is not a substitute for the hardwired contactor chain.</p>
+    </div>
+  </div>
+
+  <table>
+    <tr><th>Path</th><th>Purpose</th><th>Physical medium</th><th>Safety role</th></tr>
+    <tr><td>HP60C → Jetson</td><td>RGB-D perception and blue-cone braking input</td><td>USB</td><td>Software perception input</td></tr>
+    <tr><td>Jetson ↔ ESP32-S3</td><td>Commands, health and vehicle telemetry</td><td>USB serial, 115200</td><td>Supervised control; not independent</td></tr>
+    <tr><td>Jetson ↔ laptop</td><td>Dashboard and SSH on local LAN</td><td>WR850N Ethernet/Wi-Fi</td><td>Operator visibility only</td></tr>
+    <tr><td>Pico → ESP32-S3</td><td><span class="mono">ESTOP,0/1,sequence</span> packets</td><td>RA-02 / 433 MHz</td><td>Supplementary software stop</td></tr>
+    <tr><td>Series buttons → contactor</td><td>Traction authorization and physical cut</td><td>12 V hardwired loop</td><td class="status-ok">Independent primary stop path</td></tr>
+  </table>
+
+  <div class="callout warn"><strong>Blue cones are stop objects.</strong> They are not part of corridor-centre steering. Braking logic and steering logic must remain separated so a blue cone cannot steer the kart into an unintended path.</div>
+  <div class="footer"><span>System architecture</span><span>Page 3</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">02 / Power architecture</div>
+  <h2>48 V traction and 12 V safety/accessory domains</h2>
+  <img class="diagram" src="file:///home/satvara/Github/AutoKart-firmware/docs/electrical_wiring_assets/power-architecture.png" alt="AutoKart power architecture">
+
+  <table>
+    <tr><th>Source / conversion</th><th>Loads</th><th>Required branch treatment</th><th>Status</th></tr>
+    <tr><td>48 V battery</td><td>BLD-750 + BLDC; BM860 + NEMA34</td><td>Main fuse, service disconnect, contactor poles and separately protected load branches</td><td class="status-hold">Ratings TBD</td></tr>
+    <tr><td>48 V → 19 V buck</td><td>Jetson DC jack; TB6600 + NEMA23</td><td>Use independent output fuses and preferably separate filtering/branches so brake-driver noise or inrush cannot reset the Jetson</td><td class="status-hold">Measure load</td></tr>
+    <tr><td>12 V battery</td><td>DC contactor coil; 12 V beacon</td><td>Separate fused branches. Add coil suppression if not integrated in contactor.</td><td class="status-hold">Verify coil</td></tr>
+    <tr><td>12 V → 9 V buck</td><td>WR850N router</td><td>Verify router label voltage, polarity and current before connection</td><td class="status-hold">Label check</td></tr>
+    <tr><td>3.3 V logic rail</td><td>AS5600, AS5047P logic, RA-02 and interfaces as allowed by each module</td><td>Local decoupling; never power motors, contactor or beacon from controller logic rail</td><td class="status-ok">Logic only</td></tr>
+  </table>
+
+  <div class="grid2">
+    <div class="callout danger"><strong>No guessed fuse or cable values.</strong> Record battery short-circuit capability, continuous and peak driver current, buck input/output limits, contactor DC breaking rating, connector limits, cable length and ambient temperature first.</div>
+    <div class="callout warn"><strong>Common reference is deliberate.</strong> Bond signal COM/GND only where required by the interfaces. Never let a thin USB shield, encoder cable or sensor ground carry motor or brake return current.</div>
+  </div>
+
+  <h3>Recommended physical order</h3>
+  <p class="mono">BATTERY + → source fuse → service disconnect → contactor → branch fuse → driver/load</p>
+  <p>Place source protection as close to the battery as practical. The contactor and protection hardware must be DC-rated for the actual voltage and interrupt current; an AC rating is not interchangeable.</p>
+  <div class="footer"><span>Power architecture</span><span>Page 4</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">03 / Hardwired stop</div>
+  <h2>Series ON/OFF button and DC contactor</h2>
+  <img class="diagram" src="file:///home/satvara/Github/AutoKart-firmware/docs/electrical_wiring_assets/estop-series-chain.png" alt="Hardwired contactor series chain">
+
+  <h3>Proposed series control circuit</h3>
+  <p class="mono">12 V+ → branch fuse → maintained ON/OFF → normally-closed E-stop contact(s) → contactor coil +<br>contactor coil − → 12 V−</p>
+  <p>Opening the ON/OFF switch, pressing any normally-closed stop, breaking a series wire or losing the 12 V control supply drops the contactor. Its main poles interrupt the approved 48 V traction branch.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Hardwired path</h3>
+      <ul>
+        <li>No Jetson, ESP32, firmware, Wi-Fi or LoRa dependency.</li>
+        <li>Use maintained contact logic that does not restart automatically after power restoration.</li>
+        <li>Use a DC-rated coil and main contacts.</li>
+        <li>Fit flyback/TVS suppression if the contactor does not contain it.</li>
+        <li>Use an auxiliary contact for actual “traction energized” feedback if available.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Supplementary LoRa path</h3>
+      <ul>
+        <li><span class="mono">ESTOP,1</span> requests DAC 0 V, BLD-750 stop/brake and mechanical-brake application.</li>
+        <li><span class="mono">ESTOP,0</span> means remote switch released; it must not bypass a latched local fault.</li>
+        <li>Wireless stop is helpful, but packet reception is not proof of physical energy removal.</li>
+        <li>LoRa must remain supplementary until physically validated and safety-rated.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout warn"><strong>Beacon wiring.</strong> Power the 12 V beacon from its own fused branch. If it indicates “traction enabled,” drive it using a contactor auxiliary contact rather than only the ON command; that reports the physical contactor state more honestly.</div>
+  <div class="footer"><span>Hardwired stop chain</span><span>Page 5</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">04 / Controller pinout</div>
+  <h2>ESP32-S3 N16R8 GPIO allocation</h2>
+  <img class="diagram" src="file:///home/satvara/Github/AutoKart-firmware/docs/electrical_wiring_assets/controller-bus-map.png" alt="ESP32-S3 pin allocation">
+
+  <table class="compact">
+    <tr><th>GPIO</th><th>Function</th><th>Bus / direction</th><th>Reason / status</th></tr>
+    <tr><td>1</td><td>Steering AS5600 SDA</td><td>I²C data</td><td>Dedicated steering sensor bus</td></tr>
+    <tr><td>2</td><td>Steering AS5600 SCL</td><td>I²C clock</td><td>Dedicated steering sensor bus</td></tr>
+    <tr><td>4</td><td>BM860 STEP/PUL</td><td>Output pulses</td><td>Deterministic steering movement</td></tr>
+    <tr><td>5</td><td>BM860 DIR</td><td>Output</td><td>Steering direction</td></tr>
+    <tr><td>6</td><td>BM860 ENA</td><td>Output</td><td>Allocated; verify active polarity</td></tr>
+    <tr><td>7 / 21</td><td>GP8630N SDA / SCL</td><td>I²C</td><td>DAC command bus, address 0x58</td></tr>
+    <tr><td>8 / 9 / 10 / 11 / 12 / 17</td><td>RA-02 RESET / CS / MISO / MOSI / SCK / DIO0</td><td>SPI + interrupt</td><td>433 MHz E-stop receiver</td></tr>
+    <tr><td>13 / 14 / 15</td><td>BLD-750 BRK / EN / F/R</td><td>Output via PN2222</td><td>One transistor stage per input</td></tr>
+    <tr><td>16 / 18 / 41 / 42</td><td>AS5047P CS / SCK / MOSI / MISO</td><td>SPI mode 1</td><td>14-bit traction encoder</td></tr>
+    <tr><td>19 / 20</td><td>Native USB D− / D+</td><td>USB</td><td>Jetson serial link; do not repurpose</td></tr>
+    <tr><td>38 / 39 / 40</td><td>TB6600 STEP / DIR / ENA</td><td>Outputs</td><td>Open-loop mechanical brake</td></tr>
+    <tr><td>35 / 36</td><td><s>Brake AS5600 SDA / SCL</s></td><td>Unavailable</td><td class="status-no">N16R8 PSRAM pins — do not connect</td></tr>
+  </table>
+
+  <div class="callout danger"><strong>Pinout rule:</strong> GPIO0/3/45/46 are boot-strapping pins; GPIO26–37 are reserved for flash/PSRAM on this board configuration; GPIO19/20 carry native USB. Avoid them for new actuator or sensor assignments.</div>
+  <div class="footer"><span>ESP32-S3 N16R8 GPIO map</span><span>Page 6</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">05 / Driver interfaces</div>
+  <h2>What the drivers do — and why they are required</h2>
+  <img class="diagram" src="file:///home/satvara/Github/AutoKart-firmware/docs/electrical_wiring_assets/driver-interfaces.png" alt="Motor driver interfaces">
+
+  <table>
+    <tr><th>Device</th><th>What it is</th><th>Why it exists</th><th>Controller input</th></tr>
+    <tr><td>BM860</td><td>High-current microstep driver for NEMA34 steering motor</td><td>The ESP32 cannot source motor phase current. The driver converts STEP/DIR commands into regulated winding currents.</td><td>STEP, DIR, ENA through a compatible logic interface</td></tr>
+    <tr><td>TB6600</td><td>Stepper driver for NEMA23 brake actuator</td><td>Creates controlled motor phase current and microsteps for the mechanical brake.</td><td>STEP, DIR, ENA</td></tr>
+    <tr><td>BLD-750</td><td>48 V BLDC motor controller</td><td>Performs power commutation and accepts analog speed plus digital run/brake/direction controls.</td><td>SV analog, EN, BRK, F/R</td></tr>
+    <tr><td>GP8630N</td><td>I²C digital-to-analog converter</td><td>Turns a software voltage command into the BLD-750 SV analog signal.</td><td>I²C at 0x58</td></tr>
+    <tr><td>PN2222 stages</td><td>Low-side interface transistors</td><td>Provide the BLD-750-compatible input pull-down and protect/separate controller logic. They are not motor drivers.</td><td>GPIO13/14/15 through base resistors</td></tr>
+  </table>
+
+  <h3>Before connecting either stepper driver</h3>
+  <ol>
+    <li>Read the exact installed driver nameplate and terminal labels; “BM860” variants may differ.</li>
+    <li>Measure whether PUL/DIR/ENA inputs are opto-isolated and determine common-anode versus common-cathode wiring.</li>
+    <li>Verify 3.3 V logic compatibility or fit a proper transistor/line-driver interface.</li>
+    <li>Set phase current from the motor nameplate, not from NEMA frame size.</li>
+    <li>Set microstepping and record it in firmware. Current bench assumptions use 3200 pulses/revolution.</li>
+    <li>Confirm motor direction with wheels raised before closed-loop control.</li>
+  </ol>
+
+  <div class="callout warn"><strong>ENA is not an emergency disconnect.</strong> A logic enable can fail active and does not remove DC-bus energy. Use the hardwired contactor path for physical traction isolation.</div>
+  <div class="footer"><span>Driver roles and rationale</span><span>Page 7</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">06 / Traction</div>
+  <h2>BLD-750, GP8630N and AS5047P wiring</h2>
+
+  <h3>Analog speed command</h3>
+  <table class="compact">
+    <tr><th>From</th><th>To</th><th>Notes</th></tr>
+    <tr><td>ESP32 GPIO7</td><td>GP8630N SDA</td><td>I²C data; module address 0x58</td></tr>
+    <tr><td>ESP32 GPIO21</td><td>GP8630N SCL</td><td>I²C clock</td></tr>
+    <tr><td>GP8630N VOUT</td><td>BLD-750 SV</td><td>Measure commanded output before enabling motor</td></tr>
+    <tr><td>GP8630N GND</td><td>BLD-750 COM / control reference</td><td>Deliberate signal reference; keep away from phase-current return</td></tr>
+  </table>
+
+  <h3>BLD-750 digital inputs — one PN2222 stage per signal</h3>
+  <p class="mono">ESP32 GPIO → 1 kΩ to 2.2 kΩ → PN2222 base<br>10 kΩ base-to-emitter · emitter → ESP32 GND / BLD COM · collector → BLD input</p>
+  <table class="truth compact">
+    <tr><th>GPIO</th><th>BLD input</th><th>GPIO HIGH: transistor ON, BLD input LOW</th><th>GPIO LOW: transistor OFF</th></tr>
+    <tr><td>13</td><td>BRK</td><td>Brake released in validated bench logic</td><td>Quick/electric brake applied</td></tr>
+    <tr><td>14</td><td>EN</td><td>RUN enabled</td><td>STOP</td></tr>
+    <tr><td>15</td><td>F/R</td><td>CCW / configured forward</td><td>CW / reverse</td></tr>
+  </table>
+
+  <h3>AS5047P traction encoder</h3>
+  <table class="compact">
+    <tr><th>ESP32</th><th>AS5047P</th><th>Function</th></tr>
+    <tr><td>GPIO16</td><td>CSn</td><td>Chip select</td></tr>
+    <tr><td>GPIO18</td><td>CLK</td><td>SPI clock</td></tr>
+    <tr><td>GPIO41</td><td>MOSI</td><td>Controller data to encoder</td></tr>
+    <tr><td>GPIO42</td><td>MISO</td><td>14-bit angle data to controller</td></tr>
+    <tr><td>3.3 V / GND</td><td>VDD / GND</td><td>Local decoupling at sensor</td></tr>
+  </table>
+  <p>The AS5047P is mounted on the 14-tooth motor sprocket. The kart’s recorded final-drive relationship is 14T motor sprocket to 44T axle sprocket; firmware must apply that ratio when converting motor revolutions to axle motion.</p>
+
+  <div class="callout danger"><strong>Stop output order:</strong> command GP8630N to 0 V, command EN STOP, command BLD BRK, and apply the mechanical brake. The contactor remains the independent physical energy-cut path.</div>
+  <div class="footer"><span>Traction wiring</span><span>Page 8</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">07 / Steering and brake</div>
+  <h2>BM860 steering and TB6600 mechanical brake</h2>
+
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <h3>Steering: BM860 → NEMA34</h3>
+        <table class="compact">
+          <tr><th>ESP32</th><th>BM860</th></tr>
+          <tr><td>GPIO4</td><td>PUL / STEP interface</td></tr>
+          <tr><td>GPIO5</td><td>DIR interface</td></tr>
+          <tr><td>GPIO6</td><td>ENA interface</td></tr>
+          <tr><td>48 V branch</td><td>Driver DC supply</td></tr>
+        </table>
+        <p><b>Recorded bench motor grouping — verify with ohmmeter/nameplate:</b></p>
+        <p class="mono">Red + Blue → A+<br>Yellow + Black → A−<br>Orange + Green → B+<br>Brown + White → B−</p>
+        <p class="small">Do not trust wire colour alone. Identify windings electrically before energizing.</p>
+      </div>
+      <div class="card">
+        <h3>Steering feedback: AS5600</h3>
+        <table class="compact">
+          <tr><td>GPIO1</td><td>SDA</td></tr>
+          <tr><td>GPIO2</td><td>SCL</td></tr>
+          <tr><td>3.3 V / GND</td><td>Sensor supply/reference</td></tr>
+          <tr><td>Address</td><td>0x36</td></tr>
+        </table>
+        <p>The saved centre is the mechanically aligned straight position. A previous raw centre of 1525 is only historical; after magnet or linkage work, capture and validate a new centre.</p>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h3>Mechanical brake: TB6600 → NEMA23</h3>
+        <table class="compact">
+          <tr><th>ESP32</th><th>TB6600</th></tr>
+          <tr><td>GPIO38</td><td>PUL / STEP interface</td></tr>
+          <tr><td>GPIO39</td><td>DIR interface</td></tr>
+          <tr><td>GPIO40</td><td>ENA interface</td></tr>
+          <tr><td>19 V branch</td><td>Driver DC supply</td></tr>
+        </table>
+        <p><b>Current bench convention:</b> applying the brake pushes the actuator pin inward/clockwise; arming/releasing retracts it in the opposite direction. Firmware currently treats the mechanism as open-loop.</p>
+        <p>Bench configuration records 30° application at 3200 pulses/revolution. Confirm travel, torque and hard-stop clearance physically.</p>
+      </div>
+      <div class="callout danger">
+        <strong>No brake AS5600 is installed.</strong> Do not wire GPIO35/36. The brake must be physically released/homed before boot, and software cannot presently prove its position.
+      </div>
+      <div class="card">
+        <h3>Required improvement for production</h3>
+        <p>Add independent applied/released limit feedback or a valid position sensor on electrically available pins. Until then, missed steps, stalled motion or a disconnected coupler can remain invisible to software.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>Straight-centre hold sequence</h3>
+  <ol>
+    <li>Mechanically centre the wheels; capture stable AS5600 samples and save the median.</li>
+    <li>Reject invalid magnet status, I²C faults and implausible jumps.</li>
+    <li>Correct slowly only outside the configured deadband; stop pulses inside the band.</li>
+    <li>Disable correction on E-stop or steering sensor fault.</li>
+    <li>Revalidate centre after any magnet, coupler, chain or linkage change.</li>
+  </ol>
+  <div class="footer"><span>Steering and mechanical brake</span><span>Page 9</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">08 / Remote stop and network</div>
+  <h2>RP2040 Pico transmitter, RA-02 receiver and Jetson links</h2>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Pico 2 / RP2040 transmitter</h3>
+      <table class="compact">
+        <tr><th>Pico GPIO</th><th>Function</th></tr>
+        <tr><td>16</td><td>RA-02 MISO</td></tr>
+        <tr><td>17</td><td>RA-02 NSS / CS</td></tr>
+        <tr><td>18</td><td>RA-02 SCK</td></tr>
+        <tr><td>19</td><td>RA-02 MOSI</td></tr>
+        <tr><td>20</td><td>RA-02 RESET</td></tr>
+        <tr><td>21</td><td>RA-02 DIO0</td></tr>
+        <tr><td>22</td><td>LAY37 switch input, NC with 4.7 kΩ pull-up</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>ESP32-S3 receiver</h3>
+      <table class="compact">
+        <tr><th>ESP32 GPIO</th><th>Function</th></tr>
+        <tr><td>8</td><td>RA-02 RESET</td></tr>
+        <tr><td>9</td><td>RA-02 NSS / CS</td></tr>
+        <tr><td>10</td><td>RA-02 MISO</td></tr>
+        <tr><td>11</td><td>RA-02 MOSI</td></tr>
+        <tr><td>12</td><td>RA-02 SCK</td></tr>
+        <tr><td>17</td><td>RA-02 DIO0</td></tr>
+      </table>
+    </div>
+  </div>
+  <p>Power RA-02 modules from a clean 3.3 V supply with local decoupling and a correctly fitted 433 MHz antenna. Never transmit without the antenna. Route the RF module away from motor leads and stepper drivers.</p>
+
+  <h3>Jetson and WR850N</h3>
+  <table>
+    <tr><th>Connection</th><th>Purpose</th><th>Implementation</th></tr>
+    <tr><td>Jetson DC jack</td><td>Main-computer power</td><td>Dedicated, filtered 19 V branch from 48→19 V buck</td></tr>
+    <tr><td>Jetson USB host → HP60C</td><td>RGB-D camera</td><td>USB data/power as required by camera; secure against vibration</td></tr>
+    <tr><td>Jetson USB → ESP32-S3 native USB</td><td>VCU serial control/telemetry</td><td>115200 baud; stable by-id device path</td></tr>
+    <tr><td>Jetson Ethernet → WR850N LAN</td><td>Offline dashboard and SSH network</td><td>Static or DHCP reservation; do not depend on Internet</td></tr>
+    <tr><td>12→9 V buck → WR850N</td><td>Router power</td><td>Verify barrel polarity and actual router label</td></tr>
+  </table>
+
+  <div class="callout warn"><strong>Jetson USB-C is not the vehicle power input.</strong> On the Orin Nano developer kit it is a data/device connector. Power the board through the intended DC jack using a regulated branch that meets the board’s requirements.</div>
+  <div class="footer"><span>Remote stop and Jetson network</span><span>Page 10</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">09 / Harness schedule</div>
+  <h2>Connectors, labels and cable routing</h2>
+
+  <table>
+    <tr><th>ID</th><th>Endpoint</th><th>Conductors</th><th>Label both ends</th><th>Routing class</th></tr>
+    <tr><td>J1</td><td>48 V battery to source protection</td><td>48V+ / 48V− sized from load</td><td>BAT48+ / BAT48−</td><td>High energy</td></tr>
+    <tr><td>J2</td><td>Contactor output to 48 V branches</td><td>Protected traction feed/return</td><td>TRAC48+ / TRAC48−</td><td>High energy</td></tr>
+    <tr><td>J3</td><td>48→19 V buck output</td><td>Separate Jetson and brake branches</td><td>JET19 / BRK19</td><td>Power, filtered</td></tr>
+    <tr><td>J4</td><td>12 V safety/accessory distribution</td><td>Coil loop and beacon branch</td><td>SAFE12 / BCN12</td><td>Safety control</td></tr>
+    <tr><td>J5</td><td>12→9 V buck to WR850N</td><td>9V+ / 9V−</td><td>RTR9+ / RTR9−</td><td>Low-voltage power</td></tr>
+    <tr><td>X1</td><td>Steering</td><td>BM860 controls, motor phases, AS5600 I²C</td><td>STR-PUL/DIR/ENA; STR-A/B; STR-SDA/SCL</td><td>Separate motor/sensor bundles</td></tr>
+    <tr><td>X2</td><td>Mechanical brake</td><td>TB6600 controls and motor phases</td><td>BRK-PUL/DIR/ENA; BRK-A/B</td><td>Actuator</td></tr>
+    <tr><td>X3</td><td>BLD-750 controls</td><td>SV, COM, BRK, EN, F/R</td><td>DRV-SV/COM/BRK/EN/FR</td><td>Control, away from phases</td></tr>
+    <tr><td>X4</td><td>AS5047P</td><td>3V3, GND, CS, CLK, MOSI, MISO</td><td>ENC14-*</td><td>Shielded/twisted sensor</td></tr>
+    <tr><td>X5</td><td>RA-02</td><td>3V3, GND, SPI, reset, DIO0, antenna</td><td>LORA-*</td><td>RF/sensor</td></tr>
+    <tr><td>USB1/2</td><td>Jetson to ESP32 / HP60C</td><td>USB cables with retention</td><td>VCU-USB / CAM-USB</td><td>Data</td></tr>
+  </table>
+
+  <h3>Routing rules</h3>
+  <div class="grid2">
+    <div class="card">
+      <ul>
+        <li>Route 48 V, BLDC phases and stepper phase cables away from I²C, SPI, USB and camera cables.</li>
+        <li>Cross power and sensor wiring at 90° where separation is impossible.</li>
+        <li>Twist differential/paired conductors and signal-with-return where appropriate.</li>
+        <li>Terminate shields deliberately; avoid uncontrolled ground loops.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <ul>
+        <li>Use keyed, locking connectors with strain relief and abrasion protection.</li>
+        <li>Do not splice high-current returns into controller/sensor ground wires.</li>
+        <li>Label both ends and record connector face views, pin numbers and wire colours.</li>
+        <li>Keep buck converters and motor drivers ventilated and mechanically secured.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span>Harness and connector schedule</span><span>Page 11</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">10 / Commissioning</div>
+  <h2>Pre-power and first-motion checklist</h2>
+  <table class="check compact">
+    <tr><th>✓</th><th>Inspection / test</th><th>Required evidence</th></tr>
+    <tr><td>□</td><td>Battery polarity, isolation and chassis bonding checked with power removed</td><td>Meter readings and signed check</td></tr>
+    <tr><td>□</td><td>Source and branch fuse values selected from measured/design currents</td><td>Protection schedule</td></tr>
+    <tr><td>□</td><td>Contactor has correct DC coil voltage and DC interrupt rating</td><td>Nameplate/photo + datasheet</td></tr>
+    <tr><td>□</td><td>12 V series ON/OFF and NC stop chain drops contactor under every single open condition</td><td>Continuity and powered drop test</td></tr>
+    <tr><td>□</td><td>19 V and 9 V bucks tested unloaded and under representative load</td><td>Voltage, ripple and temperature log</td></tr>
+    <tr><td>□</td><td>GPIO35/36 have no external brake-encoder wiring</td><td>Harness inspection</td></tr>
+    <tr><td>□</td><td>BLD-750 SV remains 0 V during boot, reset and USB disconnect</td><td>Meter/scope capture</td></tr>
+    <tr><td>□</td><td>BLD EN/BRK/F-R truth table verified at controller terminals</td><td>Terminal-level voltage log</td></tr>
+    <tr><td>□</td><td>BM860/TB6600 interface polarity and current settings verified from installed nameplates</td><td>Photos and DIP record</td></tr>
+    <tr><td>□</td><td>AS5600 magnet status and stable new centre captured after mechanical work</td><td>Calibration file</td></tr>
+    <tr><td>□</td><td>AS5047P direction, zero and 14T:44T conversion checked</td><td>Rotation/telemetry test</td></tr>
+    <tr><td>□</td><td>Mechanical brake manually released/home before boot; application travel unobstructed</td><td>Witnessed bench check</td></tr>
+    <tr><td>□</td><td>Jetson sees HP60C and ESP32 by stable device identities after repeated cold boots</td><td>10-cycle boot log</td></tr>
+    <tr><td>□</td><td>WR850N dashboard works with Internet disconnected</td><td>Offline access test</td></tr>
+    <tr><td>□</td><td>First motion performed wheels-raised, restrained and guarded</td><td>Test record</td></tr>
+    <tr><td>□</td><td>Every software stop and hardwired stop reaches the intended physical state</td><td>Video + current/voltage evidence</td></tr>
+  </table>
+
+  <div class="callout danger"><strong>Do not proceed to a moving-kart test because the dashboard looks healthy.</strong> The release decision requires physical evidence that SV reaches 0 V, BLD-750 inputs change correctly, the mechanical brake applies, steering remains controlled and the contactor removes traction power.</div>
+  <div class="footer"><span>Commissioning checklist</span><span>Page 12</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">11 / Open decisions</div>
+  <h2>Values that must be measured before production release</h2>
+
+  <table>
+    <tr><th>Open item</th><th>Why it matters</th><th>Required closure</th></tr>
+    <tr><td>Exact BM860 and TB6600 variants</td><td>Input polarity, supply range, current and microstep settings vary</td><td>Photograph nameplates; archive manuals; record DIP settings</td></tr>
+    <tr><td>Fuse, wire, connector and contactor ratings</td><td>Cannot be inferred from voltage alone</td><td>Measure load/inrush and complete protection calculation</td></tr>
+    <tr><td>48→19 V buck capacity and transient response</td><td>Jetson reset or undervoltage can remove perception/control</td><td>Load test with Jetson, camera and brake activity</td></tr>
+    <tr><td>Contactor suppression and auxiliary feedback</td><td>Coil kick can reset electronics; command is not contact proof</td><td>Confirm suppression; add auxiliary state telemetry</td></tr>
+    <tr><td>Mechanical-brake position feedback</td><td>Open-loop steps cannot prove applied/released position</td><td>Add limit switches or valid sensor and validate faults</td></tr>
+    <tr><td>GP8630N voltage calibration</td><td>Software voltage must match measured BLD-750 SV</td><td>Record command-versus-output table over full range</td></tr>
+    <tr><td>Steering magnet and I²C reliability</td><td>Recent invalid samples and asymmetry prevent trustworthy hold</td><td>Fix alignment/wiring; repeat calibration and disturbance tests</td></tr>
+    <tr><td>Loaded stopping distance and latency</td><td>Blue-cone stop threshold must account for speed and delay</td><td>Instrumented tests at each approved voltage/speed</td></tr>
+    <tr><td>Hardwired stop coverage</td><td>Must remove all hazardous motion energy intended by design</td><td>Single-fault physical validation and documented reset policy</td></tr>
+  </table>
+
+  <div class="callout warn"><strong>Current maturity:</strong> this is a corrected integration drawing set for bench and controlled commissioning. It is not yet proof of road-worthy autonomous braking or a safety-rated emergency-stop system.</div>
+
+  <h3>Configuration summary</h3>
+  <p><span class="pill">Jetson only</span><span class="pill">ESP32-S3 N16R8</span><span class="pill">48 V traction</span><span class="pill">12 V safety/accessories</span><span class="pill">19 V Jetson/brake</span><span class="pill">9 V router</span><span class="pill">no LiDAR</span><span class="pill">no IMU</span><span class="pill">no brake encoder</span></p>
+  <div class="footer"><span>Production release gates</span><span>Page 13</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">References</div>
+  <h2>Authoritative data and project evidence</h2>
+
+  <h3>Official component references</h3>
+  <table>
+    <tr><th>Component</th><th>Reference</th></tr>
+    <tr><td>Jetson Orin Nano developer kit</td><td class="source"><a href="https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/quick_start.html">NVIDIA quick start</a><br><a href="https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/hardware_layout.html">NVIDIA hardware layout</a></td></tr>
+    <tr><td>ESP32-S3 N16R8 pin restrictions</td><td class="source"><a href="https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/peripherals/gpio.html">Espressif ESP32-S3 GPIO documentation</a><br><a href="https://docs.espressif.com/projects/esp-hardware-design-guidelines/en/latest/esp32s3/schematic-checklist.html">Espressif schematic checklist</a></td></tr>
+    <tr><td>WR850N supply</td><td class="source"><a href="https://static.tp-link.com/2019/201904/20190425/TL-WR850N%28EU%292.0-datasheet.pdf">TP-Link TL-WR850N datasheet</a> — verify the installed unit’s own label</td></tr>
+    <tr><td>GP8630N DAC</td><td class="source"><a href="https://wiki.dfrobot.com/dfr1230/">DFRobot GP8630N product wiki</a></td></tr>
+    <tr><td>AS5047P encoder</td><td class="source"><a href="https://look.ams-osram.com/m/96c6ce98dbc085b4/original/AS5047P_FS000140_1-00.pdf">ams OSRAM AS5047P datasheet</a></td></tr>
+    <tr><td>AS5600 encoder</td><td class="source"><a href="https://look.ams-osram.com/m/3ac60b27c91075b5/original/AS5600-FS000133-2-00.pdf">ams OSRAM AS5600 datasheet</a></td></tr>
+  </table>
+
+  <h3>Project evidence used</h3>
+  <ul class="mono">
+    <li>bench/full_bldc_lora_estop_esp32s3.py</li>
+    <li>bench/bldc_blue_cone_no_heartbeat_config.py</li>
+    <li>docs/JETSON_PRODUCTION_HANDOVER.md</li>
+    <li>docs/FULL_BLDC_ENCODER_TEST_CONNECTIONS.md</li>
+    <li>docs/AUTOKART_ESP32S3_MASTER_PINOUT.md — older conflicts superseded where noted</li>
+  </ul>
+
+  <div class="callout danger"><strong>Final wiring authority:</strong> the installed component nameplate and its manufacturer datasheet override assumptions in test code. Any pin, voltage, polarity or device substitution requires a new revision and a repeated pre-power checklist.</div>
+  <div class="footer"><span>References</span><span>Page 14</span></div>
+</section>
+
+</body>
+</html>
