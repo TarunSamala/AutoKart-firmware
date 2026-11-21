@@ -6,6 +6,7 @@ import uselect
 
 
 class SX1278:
+    TX_TIMEOUT_MS = 500
     FIFO = 0x00
     OP_MODE = 0x01
     FRF_MSB = 0x06
@@ -126,7 +127,7 @@ class SX1278:
         self.write_reg(self.OP_MODE, self.LONG_RANGE | self.TX)
         started = time.ticks_ms()
         while not (self.read_reg(self.IRQ_FLAGS) & self.TX_DONE):
-            if time.ticks_diff(time.ticks_ms(), started) > 3000:
+            if time.ticks_diff(time.ticks_ms(), started) > self.TX_TIMEOUT_MS:
                 self.receive_mode()
                 raise OSError("LoRa transmit timeout")
             time.sleep_ms(2)

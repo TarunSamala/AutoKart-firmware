@@ -1,7 +1,8 @@
 import network
 import socket
 import time
-from machine import Pin, I2C
+from machine import Pin, I2C, SPI
+from ra02_lora_chat_common import SX1278
 
 
 # ============================================================
@@ -73,6 +74,27 @@ BRK_PIN = 13
 EN_PIN = 14
 FR_PIN = 15
 
+# RA-02 LoRa receiver
+RA02_RESET_PIN = 8
+RA02_CS_PIN = 9
+RA02_MISO_PIN = 10
+RA02_MOSI_PIN = 11
+RA02_SCK_PIN = 12
+RA02_DIO0_PIN = 17
+
+# NEMA23/TB6600 mechanical brake. GPIO LOW is the confirmed inward/apply
+# direction on this installed actuator.
+MECH_BRAKE_STEP_PIN = 38
+MECH_BRAKE_DIR_PIN = 39
+MECH_BRAKE_ENABLE_PIN = 40
+MECH_BRAKE_ENABLE_LEVEL = 0
+MECH_BRAKE_APPLY_DIR_LEVEL = 0
+MECH_BRAKE_APPLY_DEG = 30.0
+MECH_BRAKE_PULSES_PER_REV = 3200
+MECH_BRAKE_PULSES = int(round(
+    MECH_BRAKE_APPLY_DEG * MECH_BRAKE_PULSES_PER_REV / 360.0
+))
+
 
 # ----------------------------
 # THROTTLE LIMIT
@@ -108,12 +130,48 @@ COMMAND_TIMEOUT_MS = 1500
 en_pin = Pin(EN_PIN, Pin.OUT)
 brk_pin = Pin(BRK_PIN, Pin.OUT)
 fr_pin = Pin(FR_PIN, Pin.OUT)
+mech_brake_step = Pin(MECH_BRAKE_STEP_PIN, Pin.OUT, value=0)
+mech_brake_dir = Pin(MECH_BRAKE_DIR_PIN, Pin.OUT, value=0)
+mech_brake_enable = Pin(
+    MECH_BRAKE_ENABLE_PIN,
+    Pin.OUT,
+    value=1 - MECH_BRAKE_ENABLE_LEVEL,
+)
 
 
 # Internal states
 en_running = False
 brake_released = False
 direction = "CW"
+mechanical_brake_applied = False
+
+
+def move_mechanical_brake(apply):
+
+    global mechanical_brake_applied
+
+    if bool(apply) == mechanical_brake_applied:
+        return
+
+    mech_brake_enable.value(MECH_BRAKE_ENABLE_LEVEL)
+    mech_brake_dir.value(
+        MECH_BRAKE_APPLY_DIR_LEVEL
+        if apply
+        else 1 - MECH_BRAKE_APPLY_DIR_LEVEL
+    )
+    time.sleep_ms(2)
+
+    for _ in range(MECH_BRAKE_PULSES):
+        mech_brake_step.value(1)
+        time.sleep_us(20)
+        mech_brake_step.value(0)
+        time.sleep_us(880)
+
+    mechanical_brake_applied = bool(apply)
+    print(
+        "MECHANICAL BRAKE ->",
+        "APPLIED / INWARD" if apply else "RELEASED / OUTWARD"
+    )
 
 
 # ------------------------------------------------------------
@@ -163,6 +221,8 @@ def brake_release():
     # transistor ON
     # BRK LOW = RUN
 
+    move_mechanical_brake(False)
+
     brk_pin.value(1)
 
     brake_released = True
@@ -179,6 +239,8 @@ def brake_apply():
     # BRK HIGH/open = QUICK BRAKE
 
     brk_pin.value(0)
+
+    move_mechanical_brake(True)
 
     brake_released = False
 
@@ -278,6 +340,32 @@ time.sleep_ms(100)
 
 
 # ============================================================
+# RA-02 LORA E-STOP RECEIVER
+# ============================================================
+
+radio_spi = SPI(
+    2,
+    baudrate=2_000_000,
+    polarity=0,
+    phase=0,
+    bits=8,
+    firstbit=SPI.MSB,
+    sck=Pin(RA02_SCK_PIN),
+    mosi=Pin(RA02_MOSI_PIN),
+    miso=Pin(RA02_MISO_PIN),
+)
+radio = SX1278(
+    radio_spi,
+    Pin(RA02_CS_PIN, Pin.OUT, value=1),
+    Pin(RA02_RESET_PIN, Pin.OUT, value=1),
+    433_000_000,
+)
+radio_dio0 = Pin(RA02_DIO0_PIN, Pin.IN)
+radio.begin()
+lora_stop_latched = False
+
+
+# ============================================================
 # THROTTLE VARIABLES
 # ============================================================
 
@@ -285,6 +373,7 @@ current_voltage = 0.0
 target_voltage = 0.0
 
 last_command_ms = time.ticks_ms()
+last_ramp_ms = time.ticks_ms()
 
 
 # ============================================================
@@ -366,6 +455,44 @@ def safe_stop(reason="SAFE STOP"):
     print("BRK -> APPLIED")
     print("EN -> STOP")
     print()
+
+
+def service_lora_estop():
+
+    global lora_stop_latched
+
+    packet = radio.receive()
+
+    if packet is None:
+        return
+
+    try:
+        text = packet.decode().strip()
+        fields = text.split(",")
+        if len(fields) != 3 or fields[0] != "ESTOP":
+            print("LORA RX INVALID:", text)
+            return
+
+        state = int(fields[1])
+        int(fields[2])
+        if state not in (0, 1):
+            print("LORA RX INVALID:", text)
+            return
+    except Exception:
+        print("LORA RX INVALID:", packet)
+        return
+
+    # Print every packet exactly as received from the Pico.
+    print("LORA RX:", text)
+
+    if state == 1:
+        if not lora_stop_latched:
+            lora_stop_latched = True
+            safe_stop("PICO LORA E-STOP")
+    else:
+        # CLEAR only prepares detection of the next press. It never releases
+        # either brake and never restarts the BLDC.
+        lora_stop_latched = False
 
 
 # ============================================================
@@ -1003,7 +1130,7 @@ server.bind(addr)
 
 server.listen(2)
 
-server.settimeout(0.05)
+server.settimeout(0)
 
 
 print("Web server ready")
@@ -1020,6 +1147,10 @@ print(
 try:
 
     while True:
+
+        # Print every Pico packet. ESTOP,1 enters the existing proven
+        # BLD750 safe-stop path and applies the mechanical brake.
+        service_lora_estop()
 
         # ====================================================
         # WEB REQUEST
@@ -1348,49 +1479,55 @@ try:
         # THROTTLE RAMP
         # ====================================================
 
-        try:
+        now_ms = time.ticks_ms()
 
-            # Rising throttle
-            if current_voltage < target_voltage:
+        if time.ticks_diff(now_ms, last_ramp_ms) >= RAMP_DELAY_MS:
 
-                new_voltage = min(
-                    current_voltage + RAMP_STEP,
-                    target_voltage
+            last_ramp_ms = now_ms
+
+            try:
+
+                # Rising throttle
+                if current_voltage < target_voltage:
+
+                    new_voltage = min(
+                        current_voltage + RAMP_STEP,
+                        target_voltage
+                    )
+
+                    write_voltage(
+                        new_voltage
+                    )
+
+
+                # Falling throttle
+                elif current_voltage > target_voltage:
+
+                    new_voltage = max(
+                        current_voltage - RAMP_STEP,
+                        target_voltage
+                    )
+
+                    write_voltage(
+                        new_voltage
+                    )
+
+
+            except Exception as e:
+
+                print(
+                    "DAC ERROR:",
+                    e
                 )
 
-                write_voltage(
-                    new_voltage
+                safe_stop(
+                    "GP8630N I2C FAULT"
                 )
 
 
-            # Falling throttle
-            elif current_voltage > target_voltage:
-
-                new_voltage = max(
-                    current_voltage - RAMP_STEP,
-                    target_voltage
-                )
-
-                write_voltage(
-                    new_voltage
-                )
-
-
-        except Exception as e:
-
-            print(
-                "DAC ERROR:",
-                e
-            )
-
-            safe_stop(
-                "GP8630N I2C FAULT"
-            )
-
-
-        time.sleep_ms(
-            RAMP_DELAY_MS
-        )
+        # Fast cooperative service loop: LoRa is polled roughly every 2 ms,
+        # while SV changes remain on the independent 40 ms scheduler above.
+        time.sleep_ms(2)
 
 
 # ============================================================

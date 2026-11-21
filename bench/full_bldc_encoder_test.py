@@ -1,4 +1,4 @@
-"""ESP32-S3 full BLD750 + GP8630N + AS5047P Wi-Fi bench test.
+"""ESP32-S3 full BLD750 + GP8630N + AS5047P bench controller.
 
 The UI uses the AutoKart RC controls: ARM/DISARM, Forward/Reverse, gears 1-5,
 Throttle Off, Wheel Lock and Emergency Stop. Normal starts, gear changes,
@@ -19,13 +19,20 @@ ESP32-S3 pins:
   BLD750 BRK GPIO13, EN GPIO14, F/R GPIO15 (through PN2222 stages)
   AS5047P CS GPIO16, SCK GPIO18, MOSI GPIO41, MISO GPIO42 (SPI mode 1)
 
-Wi-Fi: BLD750-Encoder-Test / 12345678, then open http://192.168.4.1
+Primary host control is framed USB serial. Wi-Fi remains available as a
+standalone fallback at BLD750-Encoder-Test / 12345678, http://192.168.4.1.
 """
 
+import sys
 import network
 import socket
 import time
 from machine import I2C, Pin, SPI
+
+try:
+    import uselect as select
+except ImportError:
+    import select
 
 
 SSID = "BLD750-Encoder-Test"
@@ -57,7 +64,7 @@ COUNTS_PER_REV = 16384
 
 # Bench limits and timing.
 MAX_VOLTAGE = 5.0
-BLUE_CONE_TEST_VOLTAGE = 0.5
+BLUE_CONE_TEST_VOLTAGE = 0.4
 RAMP_STEP_V = 0.08
 RAMP_INTERVAL_MS = 35
 ENCODER_INTERVAL_MS = 5
@@ -410,7 +417,7 @@ def arm_controller():
 
 
 def start_blue_cone_test():
-    """Atomically zero, arm and start forward at the fixed 0.5 V test level."""
+    """Atomically zero, arm and start forward at the fixed blue-cone test level."""
     global selected_gear
     if not gp_online:
         raise RuntimeError("GP8630N OFFLINE")
@@ -549,6 +556,118 @@ def json_status():
     )
 
 
+def execute_control(command, argument=""):
+    """Execute one transport-independent control command.
+
+    Returns the plain-text response used by both USB serial and HTTP.  Command
+    failures deliberately raise RuntimeError so each transport can report a
+    rejected action without hiding it as a successful request.
+    """
+    global selected_gear, target_voltage, last_command_ms, link_timeout_active
+
+    command = command.upper()
+    argument = argument.upper()
+    last_command_ms = time.ticks_ms()
+    link_timeout_active = False
+
+    if command == "STATUS":
+        return json_status()
+    if command == "ARM":
+        if not gp_online:
+            raise RuntimeError("GP8630N OFFLINE")
+        arm_controller()
+        return "ARMED AT 0 V"
+    if command == "TEST_START":
+        if CONTROL_LINK_TIMEOUT_MS != 0:
+            raise RuntimeError("INSTALL BLUE-CONE NO-HEARTBEAT PROFILE")
+        if armed and target_voltage > 0.0:
+            return "BLUE-CONE TEST ALREADY RUNNING AT {:.2f} V".format(
+                target_voltage
+            )
+        start_blue_cone_test()
+        return "BLUE-CONE TEST STARTED: FORWARD {:.2f} V".format(
+            BLUE_CONE_TEST_VOLTAGE
+        )
+    if command == "SOFT_STOP":
+        request_soft_stop()
+        return "THROTTLE RAMPING TO ZERO"
+    if command == "LOCK":
+        lock_wheel("REMOTE WHEEL LOCK")
+        return "WHEEL LOCKED: SV=0 V, EN=STOP, BRK=APPLIED"
+    if command == "DISARM":
+        safe_stop("REMOTE DISARM")
+        return "DISARMED + WHEEL LOCKED"
+    if command == "DRIVE":
+        if not armed:
+            raise RuntimeError("ARM FIRST")
+        if not gp_online:
+            raise RuntimeError("GP8630N OFFLINE")
+        if argument not in ("FORWARD", "REVERSE"):
+            raise RuntimeError("BAD DIRECTION")
+        request_drive(argument)
+        return argument + " REQUESTED"
+    if command == "GEAR":
+        try:
+            requested = int(argument)
+        except Exception:
+            raise RuntimeError("GEAR MUST BE 0..5")
+        if requested < 0 or requested > 5:
+            raise RuntimeError("GEAR MUST BE 0..5")
+        if requested == 0:
+            request_soft_stop("THROTTLE OFF")
+            return "THROTTLE RAMPING TO ZERO"
+        selected_gear = requested
+        if target_voltage > 0.0 and not reversal_pending:
+            target_voltage = float(selected_gear)
+        return "GEAR {} SELECTED / {:.1f} V".format(
+            selected_gear, float(selected_gear)
+        )
+    if command == "ZERO":
+        if armed or current_voltage > 0.01:
+            raise RuntimeError("DISARM AND STOP BEFORE ZERO")
+        if not encoder_ready():
+            raise RuntimeError("AS5047P NOT READY")
+        zero_encoder()
+        return "ENCODER, TURNS AND DISTANCE ZEROED"
+    raise RuntimeError("UNKNOWN COMMAND")
+
+
+serial_poll = select.poll()
+serial_poll.register(sys.stdin, select.POLLIN)
+serial_buffer = ""
+
+
+def serial_reply(request_id, outcome, payload):
+    payload = str(payload).replace("\r", " ").replace("\n", " ")
+    sys.stdout.write("@AKR {} {} {}\n".format(request_id, outcome, payload))
+
+
+def service_serial():
+    """Service newline-framed USB commands without blocking motor control."""
+    global serial_buffer
+    while serial_poll.poll(0):
+        character = sys.stdin.read(1)
+        if not character:
+            break
+        if character in "\r\n":
+            line = serial_buffer.strip()
+            serial_buffer = ""
+            if not line.startswith("@AKCMD "):
+                continue
+            parts = line.split(" ", 3)
+            request_id = parts[1] if len(parts) > 1 else "0"
+            command = parts[2] if len(parts) > 2 else ""
+            argument = parts[3].strip() if len(parts) > 3 else ""
+            try:
+                serial_reply(request_id, "OK", execute_control(command, argument))
+            except Exception as error:
+                serial_reply(request_id, "ERR", error)
+        elif len(serial_buffer) < 512:
+            serial_buffer += character
+        else:
+            serial_buffer = ""
+
+
 ap = network.WLAN(network.AP_IF)
 ap.active(True)
 ap.config(essid=SSID, password=PASSWORD)
@@ -562,6 +681,7 @@ server.listen(3)
 server.settimeout(0)
 
 print("BLD750 + AS5047P FULL BENCH TEST READY")
+print("USB serial control: @AKCMD <id> <command> [argument]")
 print("Wi-Fi:", SSID, "Password:", PASSWORD)
 print("Open: http://" + ap.ifconfig()[0])
 print("GP8630N I2C(1): SDA7 SCL21 | BLD: BRK13 EN14 F/R15")
@@ -572,6 +692,7 @@ try:
     while True:
         service_encoder()
         service_traction()
+        service_serial()
 
         if (
             CONTROL_LINK_TIMEOUT_MS > 0
@@ -593,74 +714,28 @@ try:
             first = request.split("\r\n", 1)[0].split(" ")
             path = first[1] if len(first) > 1 else "/bad"
 
-            last_command_ms = time.ticks_ms()
-            link_timeout_active = False
-
             if path == "/":
                 reply(client, HTML, content_type="text/html; charset=utf-8")
             elif path.startswith("/status"):
-                reply(client, json_status(), content_type="application/json; charset=utf-8")
+                reply(client, execute_control("STATUS"),
+                      content_type="application/json; charset=utf-8")
             elif path.startswith("/arm"):
-                if not gp_online:
-                    reply(client, "GP8630N OFFLINE", "409 Conflict")
-                else:
-                    arm_controller()
-                    reply(client, "ARMED AT 0 V")
+                reply(client, execute_control("ARM"))
             elif path.startswith("/test_start"):
-                if CONTROL_LINK_TIMEOUT_MS != 0:
-                    reply(client, "INSTALL BLUE-CONE NO-HEARTBEAT PROFILE", "409 Conflict")
-                elif armed and target_voltage > 0.0:
-                    reply(client, "BLUE-CONE TEST ALREADY RUNNING AT {:.2f} V".format(
-                        target_voltage
-                    ))
-                else:
-                    try:
-                        start_blue_cone_test()
-                        reply(client, "BLUE-CONE TEST STARTED: FORWARD 0.50 V")
-                    except RuntimeError as error:
-                        reply(client, str(error), "409 Conflict")
+                reply(client, execute_control("TEST_START"))
             elif path.startswith("/soft_stop"):
-                request_soft_stop()
-                reply(client, "THROTTLE RAMPING TO ZERO")
+                reply(client, execute_control("SOFT_STOP"))
             elif path.startswith("/lock"):
-                lock_wheel("REMOTE WHEEL LOCK")
-                reply(client, "WHEEL LOCKED: SV=0 V, EN=STOP, BRK=APPLIED")
+                reply(client, execute_control("LOCK"))
             elif path.startswith("/disarm"):
-                safe_stop("REMOTE DISARM")
-                reply(client, "DISARMED + WHEEL LOCKED")
+                reply(client, execute_control("DISARM"))
             elif path.startswith("/drive"):
                 requested = query(path, "d", "FORWARD")
-                if not armed:
-                    reply(client, "ARM FIRST", "409 Conflict")
-                elif not gp_online:
-                    reply(client, "GP8630N OFFLINE", "409 Conflict")
-                elif requested not in ("FORWARD", "REVERSE"):
-                    reply(client, "BAD DIRECTION", "400 Bad Request")
-                else:
-                    request_drive(requested)
-                    reply(client, requested + " REQUESTED")
+                reply(client, execute_control("DRIVE", requested))
             elif path.startswith("/gear"):
-                requested = int(query(path, "n", "0"))
-                if requested < 0 or requested > 5:
-                    reply(client, "GEAR MUST BE 0..5", "400 Bad Request")
-                elif requested == 0:
-                    request_soft_stop("THROTTLE OFF")
-                    reply(client, "THROTTLE RAMPING TO ZERO")
-                else:
-                    selected_gear = requested
-                    if target_voltage > 0.0 and not reversal_pending:
-                        target_voltage = float(selected_gear)
-                    reply(client, "GEAR {} SELECTED / {:.1f} V".format(
-                        selected_gear, float(selected_gear)
-                    ))
+                reply(client, execute_control("GEAR", query(path, "n", "0")))
             elif path.startswith("/zero"):
-                if armed or current_voltage > 0.01:
-                    reply(client, "DISARM AND STOP BEFORE ZERO", "409 Conflict")
-                elif not encoder_ready():
-                    reply(client, "AS5047P NOT READY", "409 Conflict")
-                else:
-                    zero_encoder()
-                    reply(client, "ENCODER, TURNS AND DISTANCE ZEROED")
+                reply(client, execute_control("ZERO"))
             else:
                 reply(client, "NOT FOUND", "404 Not Found")
         except Exception as error:

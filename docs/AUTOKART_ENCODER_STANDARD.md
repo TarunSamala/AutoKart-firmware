@@ -61,3 +61,7 @@ loaded rolling circumference before using distance as vehicle telemetry.
   clockwise application is positive.
 - BLDC: no positional zero is required for RPM/distance; cumulative distance
   starts at zero each VCU boot unless a separate odometer policy is adopted.
+- BLDC direction is frozen as **forward-positive**. Physical forward is CCW
+  when viewed from the AS5047P encoder/magnet side and produced negative raw
+  AS5047P counts during the 26 October 2026 one-turn test, so firmware applies
+  an odometry direction multiplier of `-1`.

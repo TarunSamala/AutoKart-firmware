@@ -145,7 +145,10 @@ following measurements are required before speed or distance can be trusted:
 4. **One-revolution encoder scale:** mark the 14T sprocket, rotate it exactly
    one revolution, and confirm one AS5047P angle wrap with no parity,
    diagnostic or missing-sample errors.
-5. **Rotation direction:** record raw count direction for forward and reverse.
+5. **Rotation direction:** **completed 26 October 2026** — physical forward
+   (CCW viewed from the encoder/magnet side) produced negative raw counts;
+   reverse produced positive raw counts. Vehicle telemetry therefore applies
+   a `-1` direction multiplier so forward odometry is positive.
 6. **Sprocket verification:** physically count and mark both sprockets as 14T
    and 44T.
 7. **Chain details:** record chain pitch/type, total link count, sprocket centre
